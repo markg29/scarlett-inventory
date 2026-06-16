@@ -335,6 +335,7 @@ img{display:block;max-width:100%;}
 }
 .g-stock.low{color:var(--danger);}
 .g-stock-lbl{font-size:9px;color:var(--ink3);font-weight:700;text-transform:uppercase;letter-spacing:.3px;text-align:right;}
+.g-stock-lbl.pill-style{font-size:9.5px;color:var(--brass-dim);background:#f3e3c5;border-radius:999px;padding:2px 7px;margin-top:3px;display:inline-block;}
 .g-edit-btn{
   width:28px;height:28px;border-radius:8px;border:none;background:none;
   color:var(--ink3);font-size:14px;cursor:pointer;opacity:.55;flex-shrink:0;
@@ -927,7 +928,7 @@ function renderGoods(){
     </div>
     <div class="sum-card alt">
       <div class="sum-ic">₱</div>
-      <div class="sum-val" style="font-size:18px;">₱${totalValue>=1000?(totalValue/1000).toFixed(1)+'k':totalValue.toFixed(0)}</div>
+      <div class="sum-val" style="font-size:18px;">₱${totalValue.toLocaleString('en-PH',{maximumFractionDigits:0})}</div>
       <div class="sum-lbl">Total Value</div>
     </div>
   `;
@@ -966,7 +967,7 @@ function renderGoods(){
         </div>
         <div>
           <div class="g-stock${isLow?' low':''}">${g.quantity}</div>
-          <div class="g-stock-lbl">${g.unit||'stock'}</div>
+          <div class="g-stock-lbl${g.unit?' pill-style':''}">${g.unit||'stock'}</div>
         </div>
         <button class="g-edit-btn" onclick="openEditGoods('${E(g.id)}')">✎</button>
       </div>`;
@@ -1583,4 +1584,4 @@ loadInventory();
 
 </script>
 </body>
-</html> 
+</html>

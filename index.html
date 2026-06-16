@@ -558,9 +558,27 @@ img{display:block;max-width:100%;}
         <input class="f-inp" id="mg-qty" type="number" placeholder="0" inputmode="numeric"/>
       </div>
       <div style="flex:1;">
+        <div class="f-lbl">Unit</div>
+        <select class="f-inp" id="mg-unit" style="appearance:auto;">
+          <option value="">Piliin...</option>
+          <option value="PCS">PCS</option>
+          <option value="KG">KG</option>
+          <option value="SACK">SACK</option>
+          <option value="CASE">CASE</option>
+          <option value="BUNDLE">BUNDLE</option>
+          <option value="DOZEN">DOZEN</option>
+          <option value="TIE">TIE</option>
+          <option value="BOX">BOX</option>
+          <option value="PACK">PACK</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <div style="flex:1;">
         <div class="f-lbl">Minimum Stock</div>
         <input class="f-inp" id="mg-min" type="number" placeholder="0" inputmode="numeric"/>
       </div>
+      <div style="flex:1;"></div>
     </div>
     <div class="f-hint">Mag-a-alerto kapag bumaba sa minimum stock</div>
 
@@ -826,7 +844,8 @@ async function loadInventory(){
       barcode:String(r[3]||''),
       quantity:parseFloat(r[4])||0,
       minStockQty:parseFloat(r[5])||0,
-      imageUrl:String(r[6]||'')
+      imageUrl:String(r[6]||''),
+      unit:String(r[7]||'')
     })).filter(g=>g.id&&g.name);
     movements=(d.movements||[]).map(r=>({
       id:String(r[0]||''),
@@ -858,7 +877,7 @@ async function silentRefreshInventory(){
     goods=(d.goods||[]).map(r=>({
       id:String(r[0]||''),name:String(r[1]||''),price:parseFloat(r[2])||0,
       barcode:String(r[3]||''),quantity:parseFloat(r[4])||0,
-      minStockQty:parseFloat(r[5])||0,imageUrl:String(r[6]||'')
+      minStockQty:parseFloat(r[5])||0,imageUrl:String(r[6]||''),unit:String(r[7]||'')
     })).filter(g=>g.id&&g.name);
     movements=(d.movements||[]).map(r=>({
       id:String(r[0]||''),type:String(r[1]||''),date:fmtDate(r[2]),rawDate:String(r[2]||''),
@@ -947,7 +966,7 @@ function renderGoods(){
         </div>
         <div>
           <div class="g-stock${isLow?' low':''}">${g.quantity}</div>
-          <div class="g-stock-lbl">stock</div>
+          <div class="g-stock-lbl">${g.unit||'stock'}</div>
         </div>
         <button class="g-edit-btn" onclick="openEditGoods('${E(g.id)}')">✎</button>
       </div>`;
@@ -1004,6 +1023,7 @@ function openAddGoods(){
   document.getElementById('mg-price').value='';
   document.getElementById('mg-barcode').value='';
   document.getElementById('mg-qty').value='';
+  document.getElementById('mg-unit').value='';
   document.getElementById('mg-min').value='';
   document.getElementById('mg-img-url').value='';
   document.getElementById('mg-img-file').value='';
@@ -1021,6 +1041,7 @@ function openEditGoods(id){
   document.getElementById('mg-price').value=g.price||'';
   document.getElementById('mg-barcode').value=g.barcode||'';
   document.getElementById('mg-qty').value=g.quantity||0;
+  document.getElementById('mg-unit').value=g.unit||'';
   document.getElementById('mg-min').value=g.minStockQty||'';
   document.getElementById('mg-img-url').value=g.imageUrl||'';
   document.getElementById('mg-img-file').value='';
@@ -1035,6 +1056,7 @@ async function saveGoods(){
   const price=parseFloat(document.getElementById('mg-price').value)||0;
   const barcode=document.getElementById('mg-barcode').value.trim();
   const quantity=parseFloat(document.getElementById('mg-qty').value)||0;
+  const unit=document.getElementById('mg-unit').value;
   const minStockQty=parseFloat(document.getElementById('mg-min').value)||0;
   if(!name){toast('Lagyan ng pangalan ng produkto!','err');return;}
 
@@ -1043,16 +1065,16 @@ async function saveGoods(){
   try{
     const imageUrl=await getGoodsImageData();
     if(id){
-      await apiPost({action:'editGoods',id,name,price,barcode,quantity,minStockQty,imageUrl});
+      await apiPost({action:'editGoods',id,name,price,barcode,quantity,unit,minStockQty,imageUrl});
       const idx=goods.findIndex(g=>g.id===id);
-      if(idx>=0)goods[idx]={...goods[idx],name,price,barcode,quantity,minStockQty,imageUrl};
+      if(idx>=0)goods[idx]={...goods[idx],name,price,barcode,quantity,unit,minStockQty,imageUrl};
       closeOverlay('mo-goods');
       renderGoods();
       showSaveSuccess('Produkto na-update!');
     }else{
       const newId=genGoodsId();
-      await apiPost({action:'addGoods',id:newId,name,price,barcode,quantity,minStockQty,imageUrl});
-      goods.push({id:newId,name,price,barcode,quantity,minStockQty,imageUrl});
+      await apiPost({action:'addGoods',id:newId,name,price,barcode,quantity,unit,minStockQty,imageUrl});
+      goods.push({id:newId,name,price,barcode,quantity,unit,minStockQty,imageUrl});
       closeOverlay('mo-goods');
       renderGoods();
       showSaveSuccess('Produkto na-add!');
@@ -1140,18 +1162,22 @@ function renderMovementList(type){
         <div style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px;">${g.date}</div>
         <div style="font-size:11.5px;font-weight:700;color:${type==='out'?'var(--danger)':'var(--ok)'};">${type==='out'?'−':'+'}${dayTotal} units</div>
       </div>`+
-      g.rows.map(m=>`<div class="m-card">
+      g.rows.map(m=>{
+        const mg=goods.find(x=>x.id===m.goodsItemId);
+        const munit=mg&&mg.unit?' '+mg.unit:'';
+        return `<div class="m-card">
         <div class="m-ic ${type}">${type==='out'?'📤':'📥'}</div>
         <div class="m-info">
           <div class="m-name">${m.itemName}</div>
           <div class="m-meta">${m.notes||''}</div>
         </div>
-        <div class="m-qty ${type}">${type==='out'?'−':'+'}${m.qty}</div>
+        <div class="m-qty ${type}">${type==='out'?'−':'+'}${m.qty}${munit}</div>
         <div class="m-actions">
           <button class="m-act-btn" onclick="openEditMovement('${E(m.id)}')">✎</button>
           <button class="m-act-btn" onclick="askDeleteMovement('${E(m.id)}','${E(m.itemName)}')">🗑</button>
         </div>
-      </div>`).join('');
+      </div>`;
+      }).join('');
     }).join('<div style="height:14px;"></div>');
 }
 
@@ -1180,7 +1206,7 @@ function openMovement(type){
 
   const sel=document.getElementById('mm-goods');
   sel.innerHTML='<option value="">Piliin ang produkto...</option>'+
-    goods.map(g=>`<option value="${E(g.id)}">${E(g.name)} (Stock: ${g.quantity})</option>`).join('');
+    goods.map(g=>`<option value="${E(g.id)}">${E(g.name)} (Stock: ${g.quantity}${g.unit?' '+E(g.unit):''})</option>`).join('');
 
   document.getElementById('mm-qty').value='';
   document.getElementById('mm-notes').value='';
@@ -1197,7 +1223,7 @@ function onMovementGoodsChange(){
   const hint=document.getElementById('mm-stock-hint');
   if(g){
     hint.style.display='block';
-    hint.textContent=`Kasalukuyang stock: ${g.quantity}`;
+    hint.textContent=`Kasalukuyang stock: ${g.quantity}${g.unit?' '+g.unit:''}`;
   }else{
     hint.style.display='none';
   }
@@ -1233,7 +1259,7 @@ function openEditMovement(id){
 
   const sel=document.getElementById('mm-goods');
   sel.innerHTML='<option value="">Piliin ang produkto...</option>'+
-    goods.map(g=>`<option value="${E(g.id)}">${E(g.name)} (Stock: ${g.quantity})</option>`).join('');
+    goods.map(g=>`<option value="${E(g.id)}">${E(g.name)} (Stock: ${g.quantity}${g.unit?' '+E(g.unit):''})</option>`).join('');
   sel.value=m.goodsItemId;
 
   document.getElementById('mm-qty').value=m.qty;
@@ -1327,7 +1353,7 @@ function renderBatchChecklist(){
       return `<div class="bc-row${hasVal?' active'+(outMode?' out-mode':''):''}">
         <div class="bc-info">
           <div class="bc-name">${g.name}</div>
-          <div class="bc-stock${isLow?' low':''}">Stock: ${g.quantity}${isLow?' ⚠':''}</div>
+          <div class="bc-stock${isLow?' low':''}">Stock: ${g.quantity}${g.unit?' '+g.unit:''}${isLow?' ⚠':''}</div>
         </div>
         <input class="bc-qty${hasVal?' has-val'+(outMode?' out-mode':''):''}" type="number" min="0"
           inputmode="numeric" placeholder="0" value="${curVal}"

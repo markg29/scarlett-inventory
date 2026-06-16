@@ -849,6 +849,10 @@ async function loadInventory(){
 }
 
 async function silentRefreshInventory(){
+  // Don't disrupt the user while they're filling out a form
+  const anyModalOpen=['mo-goods','mo-movement','mo-batch','mo-confirm']
+    .some(id=>document.getElementById(id)?.classList.contains('on'));
+  if(anyModalOpen)return;
   try{
     const d=await apiGet({action:'getInventory'});
     goods=(d.goods||[]).map(r=>({
@@ -861,12 +865,12 @@ async function silentRefreshInventory(){
       goodsItemId:String(r[3]||''),itemName:String(r[4]||''),qty:parseFloat(r[5])||0,notes:String(r[6]||'')
     })).filter(m=>m.id);
     if(curPage==='goods')renderGoodsSilent();
-    else if(curPage==='outgoing')renderOutgoing();
-    else if(curPage==='incoming')renderIncoming();
-    else if(curPage==='documents')renderDocuments();
+    else if(curPage==='outgoing')renderOutgoingSilent();
+    else if(curPage==='incoming')renderIncomingSilent();
+    else if(curPage==='documents')renderDocumentsSilent();
   }catch(e){}
 }
-setInterval(silentRefreshInventory,30000);
+setInterval(silentRefreshInventory,5000);
 
 // ════════════════════════════════════════
 // GOODS PAGE
@@ -1154,6 +1158,19 @@ function renderMovementList(type){
 function renderOutgoing(){renderMovementList('out');}
 function renderIncoming(){renderMovementList('in');}
 
+function renderOutgoingSilent(){
+  const pg=document.getElementById('pg-outgoing');
+  const saved=pg?pg.scrollTop:0;
+  renderOutgoing();
+  if(pg)requestAnimationFrame(()=>pg.scrollTop=saved);
+}
+function renderIncomingSilent(){
+  const pg=document.getElementById('pg-incoming');
+  const saved=pg?pg.scrollTop:0;
+  renderIncoming();
+  if(pg)requestAnimationFrame(()=>pg.scrollTop=saved);
+}
+
 function openMovement(type){
   editingMovementId=null;
   document.getElementById('mm-id').value='';
@@ -1411,6 +1428,13 @@ function askDeleteMovement(id,name){
 // ════════════════════════════════════════
 // DOCUMENTS PAGE
 // ════════════════════════════════════════
+function renderDocumentsSilent(){
+  const pg=document.getElementById('pg-documents');
+  const saved=pg?pg.scrollTop:0;
+  renderDocuments();
+  if(pg)requestAnimationFrame(()=>pg.scrollTop=saved);
+}
+
 function renderDocuments(){
   document.getElementById('doc-report-list').innerHTML=`
     <div class="doc-card" onclick="openReport('stock')">

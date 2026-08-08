@@ -820,9 +820,22 @@ function goPage(name){
         :document.getElementById('tb-back').classList.add('hide');
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   if(TMAP[name])document.getElementById(TMAP[name])?.classList.add('on');
-  // Show only FABs belonging to the active page
-  document.querySelectorAll('.page-fab').forEach(btn=>{
-    btn.style.display=btn.dataset.page===name?'flex':'none';
+  // Show only FABs belonging to the active page - explicit by ID for mobile reliability
+  const fabMap = {
+    goods:    ['goods-fab'],
+    outgoing: ['outgoing-fab','outgoing-fab-batch'],
+    incoming: ['incoming-fab','incoming-fab-batch'],
+    documents:[]
+  };
+  // Hide all FABs first
+  ['goods-fab','outgoing-fab','outgoing-fab-batch','incoming-fab','incoming-fab-batch'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display='none';
+  });
+  // Show only the ones for this page
+  (fabMap[name]||[]).forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display='flex';
   });
   curPage=name;
 }
@@ -1715,4 +1728,4 @@ loadInventory();
 
 </script>
 </body>
-</html> 
+</html>

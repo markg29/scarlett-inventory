@@ -1747,6 +1747,10 @@ function openReport(type){
 // ════════════════════════════════════════
 // BOOT
 // ════════════════════════════════════════
+// Register Service Worker for PWA installability
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
 // Use DOMContentLoaded to ensure all elements exist before running
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',function(){
@@ -1761,4 +1765,4 @@ if(document.readyState==='loading'){
 
 </script>
 </body>
-</html> 
+</html>  

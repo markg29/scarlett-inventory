@@ -1088,7 +1088,7 @@ function openGoodsDetails(id){
   currentDetailsId=id;
 
   document.getElementById('gd-img-wrap').innerHTML=g.imageUrl
-    ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='📦'"/>`
+    ? `<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:contain;background:var(--parchment-dim);" onerror="this.parentElement.innerHTML='📦'"/>`
     : '📦';
 
   document.getElementById('gd-name').textContent=g.name;
@@ -1710,6 +1710,7 @@ function openReport(type){
 // ════════════════════════════════════════
 // BOOT
 // ════════════════════════════════════════
+goPage('goods');
 loadInventory();
 
 </script>

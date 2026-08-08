@@ -425,31 +425,35 @@ img{display:block;max-width:100%;}
      ════════════════════════════════════════ -->
 <div class="page on" id="pg-goods">
 
-  <div class="sec-head">
-    <div class="sec-title">Stock Overview</div>
+  <!-- STICKY UPPER PORTION: summary + search + header -->
+  <div id="goods-upper" style="position:sticky;top:0;z-index:10;background:var(--parchment);">
+
+    <div class="sec-head" style="padding-top:6px;">
+      <div class="sec-title">Stock Overview</div>
+    </div>
+
+    <!-- Summary cards -->
+    <div id="goods-summary" style="display:flex;gap:10px;padding:0 18px 14px;"></div>
+
+    <!-- Search + filter -->
+    <div style="padding:0 18px 12px;display:flex;gap:8px;">
+      <input id="goods-search" class="g-search" placeholder="Maghanap ng produkto..." oninput="renderGoods()"/>
+      <button class="g-filter-btn" id="g-filter-low" onclick="toggleLowFilter()">⚠ Mababa</button>
+    </div>
+
+    <div class="sec-head">
+      <div class="sec-title" style="font-size:17px;">Mga Produkto</div>
+      <div class="sec-link" id="goods-count"></div>
+    </div>
   </div>
 
-  <!-- Summary cards -->
-  <div id="goods-summary" style="display:flex;gap:10px;padding:0 18px 18px;"></div>
-
-  <!-- Search + filter -->
-  <div style="padding:0 18px 14px;display:flex;gap:8px;">
-    <input id="goods-search" class="g-search" placeholder="Maghanap ng produkto..." oninput="renderGoods()"/>
-    <button class="g-filter-btn" id="g-filter-low" onclick="toggleLowFilter()">⚠ Mababa</button>
-  </div>
-
-  <div class="sec-head">
-    <div class="sec-title" style="font-size:17px;">Mga Produkto</div>
-    <div class="sec-link" id="goods-count"></div>
-  </div>
-
+  <!-- SCROLLABLE ITEMS ONLY -->
   <div id="goods-wrap">
     <div class="cload"><div class="spin"></div>Naglo-load ng imbentaryo...</div>
   </div>
 
-  <!-- Floating add button -->
-  <button id="goods-fab" class="fab" onclick="openAddGoods()">＋</button>
 </div>
+<button id="goods-fab" class="fab page-fab" data-page="goods" onclick="openAddGoods()">＋</button>
 
 <!-- ════════════════════════════════════════
      PAGE: OUTGOING
@@ -471,9 +475,10 @@ img{display:block;max-width:100%;}
     <div class="cload"><div class="spin"></div>Naglo-load...</div>
   </div>
 
-  <button id="outgoing-fab" class="fab danger" onclick="openMovement('out')">－</button>
-  <button id="outgoing-fab-batch" class="fab-batch danger" onclick="openBatchMovement('out')"><span class="bc-ic">☑</span>Batch</button>
 </div>
+<!-- FABs outside .page for guaranteed fixed positioning on Android -->
+<button id="outgoing-fab" class="fab danger page-fab" data-page="outgoing" onclick="openMovement('out')">－</button>
+<button id="outgoing-fab-batch" class="fab-batch danger page-fab" data-page="outgoing" onclick="openBatchMovement('out')"><span class="bc-ic">☑</span>Batch</button>
 
 <!-- ════════════════════════════════════════
      PAGE: INCOMING
@@ -495,9 +500,9 @@ img{display:block;max-width:100%;}
     <div class="cload"><div class="spin"></div>Naglo-load...</div>
   </div>
 
-  <button id="incoming-fab" class="fab ok" onclick="openMovement('in')">＋</button>
-  <button id="incoming-fab-batch" class="fab-batch ok" onclick="openBatchMovement('in')"><span class="bc-ic">☑</span>Batch</button>
 </div>
+<button id="incoming-fab" class="fab ok page-fab" data-page="incoming" onclick="openMovement('in')">＋</button>
+<button id="incoming-fab-batch" class="fab-batch ok page-fab" data-page="incoming" onclick="openBatchMovement('in')"><span class="bc-ic">☑</span>Batch</button>
 
 <!-- ════════════════════════════════════════
      PAGE: DOCUMENTS
@@ -541,7 +546,7 @@ img{display:block;max-width:100%;}
 <div class="overlay" id="mo-details" onclick="closeOverlay('mo-details',event)">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div id="gd-img-wrap" style="width:100%;height:160px;border-radius:14px;background:var(--parchment-dim);display:flex;align-items:center;justify-content:center;font-size:48px;margin-bottom:16px;overflow:hidden;"></div>
+    <div id="gd-img-wrap" style="width:100%;height:220px;border-radius:14px;background:var(--parchment-dim);display:flex;align-items:center;justify-content:center;font-size:64px;margin-bottom:16px;overflow:hidden;"></div>
 
     <div id="gd-name" style="font-family:var(--serif);font-size:20px;font-weight:600;color:var(--ink);margin-bottom:4px;"></div>
     <div id="gd-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;"></div>
@@ -653,7 +658,7 @@ img{display:block;max-width:100%;}
     <input type="hidden" id="mm-type"/>
 
     <div class="f-lbl">Produkto</div>
-    <select class="f-inp" id="mm-goods" style="appearance:auto;" onchange="onMovementGoodsChange()">
+    <select class="f-inp" id="mm-goods" onchange="onMovementGoodsChange()">
       <option value="">Piliin ang produkto...</option>
     </select>
     <div class="f-hint" id="mm-stock-hint" style="display:none;"></div>
@@ -762,8 +767,17 @@ const TMAP = {goods:'tb-goods', outgoing:'tb-outgoing', incoming:'tb-incoming', 
 // API HELPERS
 // ════════════════════════════════════════
 async function apiPost(b){
+  // 30-second timeout — Apps Script mabagal minsan
+  const controller = new AbortController();
+  const timeoutId = setTimeout(()=>controller.abort(), 30000);
   try{
-    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(b)});
+    const r=await fetch(API,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify(b),
+      signal:controller.signal
+    });
+    clearTimeout(timeoutId);
     if(!r.ok)throw new Error('HTTP '+r.status);
     const text=await r.text();
     let d;
@@ -771,6 +785,8 @@ async function apiPost(b){
     if(!d.ok)throw new Error(d.error||'Server error');
     return d;
   }catch(e){
+    clearTimeout(timeoutId);
+    if(e.name==='AbortError')throw new Error('Timeout — baka nai-save na. I-refresh muna bago ulit mag-try.');
     console.error('apiPost error:',e,b);
     throw e;
   }
@@ -804,6 +820,10 @@ function goPage(name){
         :document.getElementById('tb-back').classList.add('hide');
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
   if(TMAP[name])document.getElementById(TMAP[name])?.classList.add('on');
+  // Show only FABs belonging to the active page
+  document.querySelectorAll('.page-fab').forEach(btn=>{
+    btn.style.display=btn.dataset.page===name?'flex':'none';
+  });
   curPage=name;
 }
 
@@ -1164,8 +1184,19 @@ async function saveGoods(){
       renderGoods();
       showSaveSuccess('Produkto na-add!');
     }
-  }catch(e){toast('❌ '+e.message,'err');}
-  finally{btn.textContent='I-save';btn.disabled=false;}
+  }catch(e){
+    // Keep button disabled on error — user must dismiss before retrying
+    // This prevents duplicate saves when network is slow
+    btn.textContent='May Error';
+    btn.disabled=false; // re-enable so they can retry, but warn them
+    toast('❌ '+e.message,'err');
+  }
+  finally{
+    // Only re-enable if no error — already handled above
+    if(btn.textContent==='Nag-se-save...'){
+      btn.textContent='I-save';btn.disabled=false;
+    }
+  }
 }
 
 function askDeleteGoods(id,name){
@@ -1320,16 +1351,23 @@ function checkMovementQty(){
   const goodsId=document.getElementById('mm-goods').value;
   const qty=parseFloat(document.getElementById('mm-qty').value)||0;
   const warn=document.getElementById('mm-warn');
+  const btn=document.getElementById('mm-btn');
   if(type==='out'){
     const g=goods.find(x=>x.id===goodsId);
     if(g&&qty>g.quantity){
       warn.style.display='block';
-      warn.textContent=`⚠ Hindi sapat ang stock! Kasalukuyan: ${g.quantity}`;
+      warn.textContent=`⚠ Hindi pwede! Stock: ${g.quantity}${g.unit?' '+g.unit:''} — kulang para sa ${qty}`;
+      btn.disabled=true;
+      btn.style.opacity='0.45';
     }else{
       warn.style.display='none';
+      btn.disabled=false;
+      btn.style.opacity='1';
     }
   }else{
     warn.style.display='none';
+    btn.disabled=false;
+    btn.style.opacity='1';
   }
 }
 
@@ -1397,8 +1435,14 @@ async function saveMovement(){
       renderGoods();renderOutgoing();renderIncoming();
       showSaveSuccess((type==='out'?'Paglabas':'Pagpasok')+' na-record!');
     }
-  }catch(e){toast('❌ '+e.message,'err');}
-  finally{btn.textContent='I-save';btn.disabled=false;}
+  }catch(e){
+    btn.textContent='May Error';
+    btn.disabled=false;
+    toast('❌ '+e.message,'err');
+  }
+  finally{
+    if(btn.textContent==='Nag-se-save...'){btn.textContent='I-save';btn.disabled=false;}
+  }
 }
 
 // ════════════════════════════════════════
@@ -1506,9 +1550,11 @@ async function saveBatchMovement(){
     showSaveSuccess(`${items.length} produkto na-${type==='out'?'bawas':'dagdag'}!`);
     batchQty={};
   }catch(e){
+    btn.textContent='May Error';
+    btn.disabled=false;
     toast('❌ '+e.message,'err');
   }finally{
-    btn.textContent='I-save Batch';btn.disabled=false;
+    if(btn.textContent==='Nag-se-save...'){btn.textContent='I-save Batch';btn.disabled=false;}
   }
 }
 

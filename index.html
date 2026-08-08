@@ -417,14 +417,12 @@ img{display:block;max-width:100%;}
   <!-- Goods page action -->
   <button id="goods-add-btn" style="width:36px;height:36px;border-radius:50%;border:none;background:var(--wine-600);color:#fff;font-size:22px;display:none;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;" onclick="openAddGoods()">＋</button>
   <!-- Outgoing page actions -->
-  <div id="outgoing-btns" style="display:none;align-items:center;gap:8px;">
-    <button style="height:34px;padding:0 14px;border-radius:999px;border:2px solid var(--danger);background:transparent;color:var(--danger);font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;" onclick="openBatchMovement('out')">☑ Batch</button>
-    <button style="width:36px;height:36px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="openMovement('out')">－</button>
+  <div id="outgoing-btns" style="display:none;align-items:center;">
+    <button style="height:36px;padding:0 18px;border-radius:999px;border:none;background:var(--danger);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="openBatchMovement('out')">📤 I-record</button>
   </div>
   <!-- Incoming page actions -->
-  <div id="incoming-btns" style="display:none;align-items:center;gap:8px;">
-    <button style="height:34px;padding:0 14px;border-radius:999px;border:2px solid var(--ok);background:transparent;color:var(--ok);font-size:12.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;" onclick="openBatchMovement('in')">☑ Batch</button>
-    <button style="width:36px;height:36px;border-radius:50%;border:none;background:var(--ok);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="openMovement('in')">＋</button>
+  <div id="incoming-btns" style="display:none;align-items:center;">
+    <button style="height:36px;padding:0 18px;border-radius:999px;border:none;background:var(--ok);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="openBatchMovement('in')">📥 I-record</button>
   </div>
   <button class="tb-action" id="tb-action" onclick="topAction()" style="display:none;">＋</button>
 </div>
@@ -1730,4 +1728,4 @@ if(document.readyState==='loading'){
 
 </script>
 </body>
-</html> 
+</html>

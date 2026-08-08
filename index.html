@@ -875,13 +875,16 @@ function showSaveSuccess(msg){
 // ════════════════════════════════════════
 function E(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 
+const _fmtCache={};
 function fmtDate(v){
   if(!v)return '';
-  if(typeof v==='string'&&!v.includes('T')&&!v.match(/^\d{4}-\d{2}-\d{2}T/))return v;
+  if(_fmtCache[v])return _fmtCache[v];
+  if(typeof v==='string'&&!v.includes('T')&&!v.match(/^\d{4}-\d{2}-\d{2}T/)){_fmtCache[v]=v;return v;}
   try{
     const d=new Date(v);
-    if(isNaN(d.getTime()))return String(v);
-    return d.toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'});
+    if(isNaN(d.getTime())){_fmtCache[v]=String(v);return _fmtCache[v];}
+    _fmtCache[v]=d.toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'});
+    return _fmtCache[v];
   }catch(e){return String(v);}
 }
 
@@ -899,36 +902,55 @@ function genMovementId(type){
 // ════════════════════════════════════════
 // LOAD DATA
 // ════════════════════════════════════════
+function parseGoods(raw){
+  return (raw||[]).map(r=>({
+    id:String(r[0]||''),name:String(r[1]||''),price:parseFloat(r[2])||0,
+    barcode:String(r[3]||''),quantity:parseFloat(r[4])||0,
+    minStockQty:parseFloat(r[5])||0,imageUrl:String(r[6]||''),unit:String(r[7]||'')
+  })).filter(g=>g.id&&g.name);
+}
+function parseMovements(raw){
+  return (raw||[]).map(r=>({
+    id:String(r[0]||''),type:String(r[1]||''),date:fmtDate(r[2]),
+    rawDate:String(r[2]||''),goodsItemId:String(r[3]||''),
+    itemName:String(r[4]||''),qty:parseFloat(r[5])||0,notes:String(r[6]||'')
+  })).filter(m=>m.id);
+}
+
 async function loadInventory(){
+  // Show cached data instantly while fetching fresh data
+  try{
+    const cached=localStorage.getItem('scarlett_cache');
+    if(cached){
+      const c=JSON.parse(cached);
+      goods=c.goods||[];
+      movements=c.movements||[];
+      renderGoods();
+      // Defer movement renders - goods is most important
+      requestAnimationFrame(()=>{
+        renderOutgoing();
+        renderIncoming();
+        renderDocuments();
+      });
+    }
+  }catch(e){}
+
+  // Fetch fresh data in background
   try{
     const d=await apiGet({action:'getInventory'});
-    goods=(d.goods||[]).map(r=>({
-      id:String(r[0]||''),
-      name:String(r[1]||''),
-      price:parseFloat(r[2])||0,
-      barcode:String(r[3]||''),
-      quantity:parseFloat(r[4])||0,
-      minStockQty:parseFloat(r[5])||0,
-      imageUrl:String(r[6]||''),
-      unit:String(r[7]||'')
-    })).filter(g=>g.id&&g.name);
-    movements=(d.movements||[]).map(r=>({
-      id:String(r[0]||''),
-      type:String(r[1]||''),
-      date:fmtDate(r[2]),
-      rawDate:String(r[2]||''),
-      goodsItemId:String(r[3]||''),
-      itemName:String(r[4]||''),
-      qty:parseFloat(r[5])||0,
-      notes:String(r[6]||'')
-    })).filter(m=>m.id);
+    goods=parseGoods(d.goods);
+    movements=parseMovements(d.movements);
+    // Save to cache for next load
+    try{localStorage.setItem('scarlett_cache',JSON.stringify({goods,movements,ts:Date.now()}));}catch(e){}
     renderGoods();
     renderOutgoing();
     renderIncoming();
     renderDocuments();
   }catch(e){
-    toast('❌ Hindi ma-load: '+e.message,'err');
-    document.getElementById('goods-wrap').innerHTML=`<div class="empty"><div class="empty-ic">⚠️</div><div class="empty-h">Hindi ma-load</div><div class="empty-b">${e.message}</div></div>`;
+    if(!goods.length){
+      toast('❌ Hindi ma-load: '+e.message,'err');
+      document.getElementById('goods-wrap').innerHTML=`<div class="empty"><div class="empty-ic">⚠️</div><div class="empty-h">Hindi ma-load</div><div class="empty-b">${e.message}</div></div>`;
+    }
   }
 }
 
@@ -939,15 +961,10 @@ async function silentRefreshInventory(){
   if(anyModalOpen)return;
   try{
     const d=await apiGet({action:'getInventory'});
-    goods=(d.goods||[]).map(r=>({
-      id:String(r[0]||''),name:String(r[1]||''),price:parseFloat(r[2])||0,
-      barcode:String(r[3]||''),quantity:parseFloat(r[4])||0,
-      minStockQty:parseFloat(r[5])||0,imageUrl:String(r[6]||''),unit:String(r[7]||'')
-    })).filter(g=>g.id&&g.name);
-    movements=(d.movements||[]).map(r=>({
-      id:String(r[0]||''),type:String(r[1]||''),date:fmtDate(r[2]),rawDate:String(r[2]||''),
-      goodsItemId:String(r[3]||''),itemName:String(r[4]||''),qty:parseFloat(r[5])||0,notes:String(r[6]||'')
-    })).filter(m=>m.id);
+    goods=parseGoods(d.goods);
+    movements=parseMovements(d.movements);
+    // Update cache
+    try{localStorage.setItem('scarlett_cache',JSON.stringify({goods,movements,ts:Date.now()}));}catch(e){}
     if(curPage==='goods')renderGoodsSilent();
     else if(curPage==='outgoing')renderOutgoingSilent();
     else if(curPage==='incoming')renderIncomingSilent();

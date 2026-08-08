@@ -1471,6 +1471,8 @@ function openBatchMovement(type){
 function renderBatchChecklist(){
   const q=(document.getElementById('mb-search').value||'').toLowerCase().trim();
   let list=[...goods];
+  // For outgoing: only show items with stock > 0
+  if(batchType==='out')list=list.filter(g=>g.quantity>0);
   if(q)list=list.filter(g=>g.name.toLowerCase().includes(q)||g.barcode.toLowerCase().includes(q));
   list.sort((a,b)=>a.name.localeCompare(b.name));
 
@@ -1498,7 +1500,15 @@ function renderBatchChecklist(){
 }
 
 function onBatchQtyChange(goodsId,val,el){
-  const qty=parseFloat(val)||0;
+  let qty=parseFloat(val)||0;
+  // For outgoing: cap at available stock, prevent negative
+  if(batchType==='out'){
+    const g=goods.find(x=>x.id===goodsId);
+    if(g&&qty>g.quantity){
+      qty=g.quantity;
+      el.value=qty; // reset input to max allowed
+    }
+  }
   if(qty>0){
     batchQty[goodsId]=qty;
     el.classList.add('has-val');
@@ -1728,4 +1738,4 @@ if(document.readyState==='loading'){
 
 </script>
 </body>
-</html> 
+</html>

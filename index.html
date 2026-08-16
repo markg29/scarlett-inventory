@@ -598,6 +598,7 @@ img{display:block;max-width:100%;}
       <button class="m-cancel" id="gd-delete-btn" style="color:var(--danger);" onclick="askDeleteGoodsFromDetails()">🗑 I-delete</button>
       <button class="m-save" id="gd-edit-btn" onclick="editGoodsFromDetails()">✎ I-edit</button>
     </div>
+    <button id="gd-link-btn" onclick="openLinkModal()" style="width:100%;margin-top:10px;height:40px;border-radius:12px;border:1.5px solid var(--wine-600);background:transparent;color:var(--wine-600);font-size:13px;font-weight:700;cursor:pointer;">🔗 I-link sa OrderKo</button>
   </div>
 </div>
 
@@ -1062,6 +1063,159 @@ function renderGoodsSilent(){
   const saved=pg?pg.scrollTop:0;
   renderGoods();
   if(pg)requestAnimationFrame(()=>pg.scrollTop=saved);
+}
+
+// ════════════════════════════════════════
+// ORDERKO ITEM LINKS
+// ════════════════════════════════════════
+let orderkoItems = [];    // Fetched from OrderKo API (allItems)
+let itemLinks = {};       // {scarlett_goods_id: Set of orderko_item_ids}
+let linkingGoodsId = null;
+let selectedLinks = new Set();
+
+async function loadOrderkoItems(){
+  if(orderkoItems.length) return; // Already loaded
+  try{
+    const d = await apiGet({action:'getAll'});
+    orderkoItems = (d.items||[]).map(r=>({
+      id:String(r[0]||''),
+      supplierId:String(r[1]||''),
+      supplierName:String(r[3]||''), // Will fill from suppliers
+      name:String(r[2]||''),
+      unit:String(r[3]||''),
+      category:String(r[7]||'')
+    })).filter(i=>i.id&&i.name);
+    // Load supplier names
+    const sups = (d.suppliers||[]).map(r=>({id:String(r[0]||''),name:String(r[1]||'')}));
+    const supMap = {};
+    sups.forEach(s=>supMap[s.id]=s.name);
+    orderkoItems.forEach(i=>i.supplierName=supMap[i.supplierId]||'');
+  }catch(e){
+    toast('Hindi ma-load ang OrderKo items','err');
+  }
+}
+
+async function loadItemLinks(){
+  try{
+    const d = await apiGet({action:'getItemLinks'});
+    itemLinks = {};
+    (d.links||[]).forEach(row=>{
+      const scarlettId = String(row[0]||'');
+      const orderkoId = String(row[1]||'');
+      if(!scarlettId||!orderkoId) return;
+      if(!itemLinks[scarlettId]) itemLinks[scarlettId] = new Set();
+      itemLinks[scarlettId].add(orderkoId);
+    });
+  }catch(e){}
+}
+
+async function openLinkModal(){
+  const g = goods.find(g=>g.id===currentDetailsId);
+  if(!g) return;
+  linkingGoodsId = g.id;
+
+  // Show current goods name
+  document.getElementById('link-goods-name').textContent = g.name;
+  document.getElementById('link-search').value = '';
+
+  // Load data if not yet loaded
+  const btn = document.getElementById('link-save-btn');
+  btn.textContent = 'Naglo-load...'; btn.disabled = true;
+  await Promise.all([loadOrderkoItems(), loadItemLinks()]);
+  btn.textContent = 'I-save'; btn.disabled = false;
+
+  // Pre-select currently linked items
+  selectedLinks = new Set(itemLinks[linkingGoodsId] || []);
+
+  renderLinkList();
+  updateLinkCurrent();
+  openOverlay('mo-link');
+}
+
+function renderLinkList(){
+  const q = (document.getElementById('link-search')?.value||'').toLowerCase();
+  let list = orderkoItems;
+  if(q) list = list.filter(i=>
+    i.name.toLowerCase().includes(q) ||
+    i.supplierName.toLowerCase().includes(q) ||
+    i.category.toLowerCase().includes(q)
+  );
+
+  // Group by supplier
+  const grouped = {};
+  list.forEach(i=>{
+    const sup = i.supplierName || 'Walang supplier';
+    if(!grouped[sup]) grouped[sup] = [];
+    grouped[sup].push(i);
+  });
+
+  const wrap = document.getElementById('link-list');
+  if(!list.length){
+    wrap.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px;">Walang resulta</div>';
+    return;
+  }
+
+  wrap.innerHTML = Object.entries(grouped).sort((a,b)=>a[0].localeCompare(b[0])).map(([sup, items])=>`
+    <div style="padding:8px 12px 4px;font-size:10px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;background:var(--parchment-dim);">${sup}</div>
+    ${items.map(i=>{
+      const checked = selectedLinks.has(i.id);
+      return `<div onclick="toggleLink('${E(i.id)}')" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer;background:${checked?'rgba(122,31,43,.06)':''};">
+        <div style="width:20px;height:20px;border-radius:5px;border:2px solid ${checked?'var(--wine-600)':'var(--line)'};background:${checked?'var(--wine-600)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;color:#fff;">${checked?'✓':''}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;line-height:1.3;">${i.name}</div>
+          ${i.unit?`<span style="font-size:10px;font-weight:700;color:var(--wine-600);background:var(--parchment-dim);border-radius:4px;padding:1px 5px;">${i.unit}</span>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+  `).join('');
+}
+
+function toggleLink(orderkoItemId){
+  if(selectedLinks.has(orderkoItemId)){
+    selectedLinks.delete(orderkoItemId);
+  }else{
+    selectedLinks.add(orderkoItemId);
+  }
+  renderLinkList();
+  updateLinkCurrent();
+}
+
+function updateLinkCurrent(){
+  const current = document.getElementById('link-current');
+  if(selectedLinks.size===0){
+    current.style.display='none';
+    return;
+  }
+  const names = [...selectedLinks].map(id=>{
+    const item = orderkoItems.find(i=>i.id===id);
+    return item?item.name:id;
+  });
+  current.style.display='block';
+  current.innerHTML = `<strong>${selectedLinks.size} naka-link:</strong> ${names.join(', ')}`;
+}
+
+async function saveLinks(){
+  const btn = document.getElementById('link-save-btn');
+  btn.textContent = 'Nag-se-save...'; btn.disabled = true;
+  try{
+    await apiPost({
+      action: 'saveItemLinks',
+      scarlett_id: linkingGoodsId,
+      orderko_ids: [...selectedLinks]
+    });
+    // Update local cache
+    if(selectedLinks.size>0){
+      itemLinks[linkingGoodsId] = new Set(selectedLinks);
+    }else{
+      delete itemLinks[linkingGoodsId];
+    }
+    closeOverlay('mo-link');
+    toast('Na-save ang links ✓','ok');
+  }catch(e){
+    toast('❌ '+e.message,'err');
+  }finally{
+    btn.textContent='I-save'; btn.disabled=false;
+  }
 }
 
 // ════════════════════════════════════════
@@ -1920,8 +2074,31 @@ if(document.readyState==='loading'){
   // DOM already ready (script at bottom of body)
   goPage('goods');
   loadInventory();
+loadItemLinks();
 }
 
 </script>
+
+<!-- ════════════════════════════════════════
+     MODAL: LINK TO ORDERKO
+     ════════════════════════════════════════ -->
+<div class="overlay" id="mo-link" onclick="closeOverlay('mo-link',event)">
+  <div class="sheet" style="max-height:88vh;">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">🔗 I-link sa OrderKo</div>
+    <div id="link-goods-name" style="font-size:13px;color:var(--ink3);margin:-10px 0 14px;"></div>
+    <!-- Search -->
+    <input id="link-search" class="f-inp" placeholder="Maghanap ng OrderKo item..." oninput="renderLinkList()" style="margin-bottom:10px;"/>
+    <!-- Current links summary -->
+    <div id="link-current" style="display:none;background:var(--parchment-dim);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--ink2);"></div>
+    <!-- Item list -->
+    <div id="link-list" style="max-height:45vh;overflow-y:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:14px;"></div>
+    <div class="modal-btns">
+      <button class="m-cancel" onclick="closeOverlay('mo-link')">Kanselahin</button>
+      <button class="m-save" id="link-save-btn" onclick="saveLinks()">I-save</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

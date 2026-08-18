@@ -922,8 +922,11 @@ function fmtDate(v){
 }
 
 function genGoodsId(){
-  const n=goods.length+1;
-  return 'GDS-'+String(n).padStart(4,'0')+'-'+Math.random().toString(36).slice(2,5).toUpperCase();
+  const maxNum = goods.reduce((max, g) => {
+    const m = g.id.match(/GDS-(\d+)/);
+    return m ? Math.max(max, parseInt(m[1])) : max;
+  }, 0);
+  return 'GDS-'+String(maxNum+1).padStart(4,'0')+'-'+Math.random().toString(36).slice(2,5).toUpperCase();
 }
 function genMovementId(type){
   const prefix=type==='in'?'INC':'OUT';

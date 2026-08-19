@@ -1032,7 +1032,7 @@ async function silentRefreshInventory(){
     else if(curPage==='documents')renderDocumentsSilent();
   }catch(e){ setConnStatus('error'); }
 }
-setInterval(silentRefreshInventory,5000);
+setInterval(silentRefreshInventory,60000);
 
 // ════════════════════════════════════════
 // GOODS PAGE
@@ -1975,6 +1975,15 @@ function openReport(type){
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible'){
+    const dot = document.getElementById('conn-dot');
+    const bg = dot ? dot.style.background : '';
+    if(bg === '#ef4444' || bg === '#f59e0b'){
+      silentRefreshInventory();
+    }
+  }
+});
 // Use DOMContentLoaded to ensure all elements exist before running
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',function(){

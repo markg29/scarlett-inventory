@@ -1006,7 +1006,7 @@ async function loadInventory(){
     movements=parseMovements(d.movements);
     // Save to cache for next load
     try{localStorage.setItem('scarlett_cache',JSON.stringify({goods,movements,ts:Date.now()}));}catch(e){}
-    renderGoods();
+    renderGoods(); // Will include link icons if itemLinks already loaded
     renderOutgoing();
     renderIncoming();
     renderDocuments();
@@ -1096,9 +1096,9 @@ async function loadItemLinks(){
       if(!itemLinks[scarlettId]) itemLinks[scarlettId] = new Set();
       itemLinks[scarlettId].add(orderkoId);
     });
-    // Re-render goods so link icons appear
-    if(goods.length) renderGoodsSilent();
-    // Also update details modal if currently open
+    // Always re-render — goods may have loaded by now
+    renderGoodsSilent();
+    // Also update details modal if open
     if(currentDetailsId && document.getElementById('mo-details')?.classList.contains('on')){
       openGoodsDetails(currentDetailsId);
     }
@@ -2014,17 +2014,18 @@ document.addEventListener('visibilitychange', ()=>{
 });
 // Use DOMContentLoaded to ensure all elements exist before running
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',function(){
+  document.addEventListener('DOMContentLoaded', async function(){
     goPage('goods');
     loadInventory();
+    // Load links and orderko items in parallel after inventory starts
+    await Promise.all([loadItemLinks(), loadOrderkoItems()]);
   });
 }else{
-  // DOM already ready (script at bottom of body)
   goPage('goods');
   loadInventory();
-loadItemLinks();
+  // Load links in background — will re-render when done
+  Promise.all([loadItemLinks(), loadOrderkoItems()]);
 }
-
 </script>
 
 <!-- ════════════════════════════════════════

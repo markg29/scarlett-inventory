@@ -584,6 +584,11 @@ img{display:block;max-width:100%;}
       <button class="m-cancel" id="gd-delete-btn" style="color:var(--danger);" onclick="askDeleteGoodsFromDetails()">🗑 I-delete</button>
       <button class="m-save" id="gd-edit-btn" onclick="editGoodsFromDetails()">✎ I-edit</button>
     </div>
+    <!-- Linked OrderKo items display -->
+    <div id="gd-linked-section" style="display:none;margin-bottom:10px;background:var(--parchment-dim);border-radius:12px;padding:10px 14px;">
+      <div style="font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Naka-link sa OrderKo</div>
+      <div id="gd-linked-items"></div>
+    </div>
     <button id="gd-link-btn" onclick="openLinkModal()" style="width:100%;margin-top:10px;height:40px;border-radius:12px;border:1.5px solid var(--wine-600);background:transparent;color:var(--wine-600);font-size:13px;font-weight:700;cursor:pointer;">🔗 I-link sa OrderKo</button>
   </div>
 </div>
@@ -1086,11 +1091,13 @@ async function loadItemLinks(){
     itemLinks = {};
     (d.links||[]).forEach(row=>{
       const scarlettId = String(row[0]||'');
-      const orderkoId = String(row[1]||'');
+      const orderkoId  = String(row[1]||'');
       if(!scarlettId||!orderkoId) return;
       if(!itemLinks[scarlettId]) itemLinks[scarlettId] = new Set();
       itemLinks[scarlettId].add(orderkoId);
     });
+    // Re-render goods so link icons appear
+    if(goods.length) renderGoodsSilent();
   }catch(e){}
 }
 
@@ -1349,9 +1356,25 @@ function openGoodsDetails(id){
 
   document.getElementById('gd-stock').textContent=g.quantity+(g.unit?' '+g.unit:'');
   document.getElementById('gd-price').textContent=g.price>0?'₱'+g.price.toFixed(2):'—';
-
   document.getElementById('gd-barcode').textContent=g.barcode||'—';
   document.getElementById('gd-min').textContent=g.minStockQty>0?(g.minStockQty+(g.unit?' '+g.unit:'')):'—';
+
+  // Show linked OrderKo items
+  const linkedSection=document.getElementById('gd-linked-section');
+  const links=itemLinks[id];
+  if(linkedSection){
+    if(links&&links.size>0){
+      const linkedNames=[...links].map(orderkoId=>{
+        const item=orderkoItems.find(i=>i.id===orderkoId);
+        return item?item.name:orderkoId;
+      });
+      linkedSection.style.display='block';
+      document.getElementById('gd-linked-items').innerHTML=
+        linkedNames.map(name=>`<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2);">🔗 ${name}</div>`).join('');
+    }else{
+      linkedSection.style.display='none';
+    }
+  }
 
   openOverlay('mo-details');
 }

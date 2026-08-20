@@ -1098,6 +1098,10 @@ async function loadItemLinks(){
     });
     // Re-render goods so link icons appear
     if(goods.length) renderGoodsSilent();
+    // Also update details modal if currently open
+    if(currentDetailsId && document.getElementById('mo-details')?.classList.contains('on')){
+      openGoodsDetails(currentDetailsId);
+    }
   }catch(e){}
 }
 
@@ -1106,20 +1110,18 @@ async function openLinkModal(){
   if(!g) return;
   linkingGoodsId = g.id;
 
-  // Show current goods name
   document.getElementById('link-goods-name').textContent = g.name;
   document.getElementById('link-search').value = '';
 
-  // Load data if not yet loaded
+  // Load data only if not yet loaded
   const btn = document.getElementById('link-save-btn');
-  btn.textContent = 'Naglo-load...'; btn.disabled = true;
-  await Promise.all([loadOrderkoItems(), loadItemLinks()]);
-  btn.textContent = 'I-save'; btn.disabled = false;
+  if(!orderkoItems.length){
+    btn.textContent = 'Naglo-load...'; btn.disabled = true;
+    await Promise.all([loadOrderkoItems(), loadItemLinks()]);
+    btn.textContent = 'I-save'; btn.disabled = false;
+  }
 
-  // Pre-select currently linked items
   selectedLinks = new Set(itemLinks[linkingGoodsId] || []);
-
-  // Show unlink button if there are existing links
   const unlinkBtn = document.getElementById('link-unlink-btn');
   if(unlinkBtn) unlinkBtn.style.display = selectedLinks.size > 0 ? 'block' : 'none';
 
@@ -1214,6 +1216,9 @@ async function saveLinks(){
       delete itemLinks[linkingGoodsId];
     }
     closeOverlay('mo-link');
+    // Refresh goods list for link icon and details if open
+    renderGoodsSilent();
+    if(currentDetailsId) openGoodsDetails(currentDetailsId);
     toast('Na-save ang links ✓','ok');
   }catch(e){
     toast('❌ '+e.message,'err');

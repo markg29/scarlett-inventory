@@ -580,14 +580,15 @@ img{display:block;max-width:100%;}
       <span id="gd-min" style="font-family:var(--mono);color:var(--ink);"></span>
     </div>
 
+    <!-- Naka-link sa OrderKo — shown if there are links -->
+    <div id="gd-linked-section" style="display:none;margin:14px 0 0;">
+      <div style="font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;padding:10px 0 6px;border-top:1px solid var(--line);">🔗 Naka-link sa OrderKo</div>
+      <div id="gd-linked-items" style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;"></div>
+    </div>
+
     <div class="modal-btns">
       <button class="m-cancel" id="gd-delete-btn" style="color:var(--danger);" onclick="askDeleteGoodsFromDetails()">🗑 I-delete</button>
       <button class="m-save" id="gd-edit-btn" onclick="editGoodsFromDetails()">✎ I-edit</button>
-    </div>
-    <!-- Linked OrderKo items display -->
-    <div id="gd-linked-section" style="display:none;margin-bottom:10px;background:var(--parchment-dim);border-radius:12px;padding:10px 14px;">
-      <div style="font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Naka-link sa OrderKo</div>
-      <div id="gd-linked-items"></div>
     </div>
     <button id="gd-link-btn" onclick="openLinkModal()" style="width:100%;margin-top:10px;height:40px;border-radius:12px;border:1.5px solid var(--wine-600);background:transparent;color:var(--wine-600);font-size:13px;font-weight:700;cursor:pointer;">🔗 I-link sa OrderKo</button>
   </div>
@@ -1067,15 +1068,17 @@ async function loadOrderkoItems(){
   if(orderkoItems.length) return; // Already loaded
   try{
     const d = await apiGet({action:'getAll'});
+    // Items: A=ID, B=SupplierID, C=Name, D=Unit, E=Price, F=MaxOrder, G=ImageUrl, H=Category
     orderkoItems = (d.items||[]).map(r=>({
       id:String(r[0]||''),
       supplierId:String(r[1]||''),
-      supplierName:String(r[3]||''), // Will fill from suppliers
       name:String(r[2]||''),
       unit:String(r[3]||''),
-      category:String(r[7]||'')
+      price:parseFloat(r[4])||0,
+      category:String(r[7]||''),
+      supplierName:'' // filled below
     })).filter(i=>i.id&&i.name);
-    // Load supplier names
+    // Fill supplier names
     const sups = (d.suppliers||[]).map(r=>({id:String(r[0]||''),name:String(r[1]||'')}));
     const supMap = {};
     sups.forEach(s=>supMap[s.id]=s.name);
@@ -2025,6 +2028,29 @@ if(document.readyState==='loading'){
   loadInventory();
   // Load links in background — will re-render when done
   Promise.all([loadItemLinks(), loadOrderkoItems()]);
+}
+
+// ── Service Worker update detection ──────────────────────────────
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.ready.then(reg=>{
+    setInterval(()=>reg.update(), 5*60*1000);
+  });
+  navigator.serviceWorker.addEventListener('message', e=>{
+    if(e.data?.type==='sw-updated') showUpdateToast();
+  });
+}
+
+function showUpdateToast(){
+  if(document.getElementById('sw-update-toast')) return;
+  const el=document.createElement('div');
+  el.id='sw-update-toast';
+  el.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--ink);color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap;';
+  el.innerHTML=`
+    <span style="font-size:13px;font-weight:600;">🆕 May bagong update!</span>
+    <button onclick="window.location.reload()" style="height:32px;padding:0 14px;border-radius:999px;border:none;background:#fff;color:var(--ink);font-size:12px;font-weight:700;cursor:pointer;">I-refresh</button>
+    <button onclick="this.parentElement.remove()" style="width:24px;height:24px;border-radius:50%;border:none;background:rgba(255,255,255,.2);color:#fff;font-size:14px;cursor:pointer;">✕</button>
+  `;
+  document.body.appendChild(el);
 }
 </script>
 

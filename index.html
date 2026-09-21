@@ -1029,7 +1029,6 @@ async function loadInventory(){
 }
 
 async function silentRefreshInventory(){
-  // Don't disrupt the user while they're filling out a form
   const anyModalOpen=['mo-goods','mo-movement','mo-batch','mo-confirm']
     .some(id=>document.getElementById(id)?.classList.contains('on'));
   if(anyModalOpen)return;
@@ -1037,24 +1036,17 @@ async function silentRefreshInventory(){
     const d=await apiGet({action:'getInventory'});
     setConnStatus('ok');
     goods=parseGoods(d.goods);
-    movements=parseMovements(d.movements);
-    // Update cache
+    // Merge server movements with local optimistic updates not yet synced
+    const serverMovements=parseMovements(d.movements);
+    const serverIds=new Set(serverMovements.map(m=>m.id));
+    const localOnly=movements.filter(m=>!serverIds.has(m.id));
+    movements=[...serverMovements,...localOnly];
     try{localStorage.setItem('scarlett_cache',JSON.stringify({goods,movements,ts:Date.now()}));}catch(e){}
     if(curPage==='goods')renderGoodsSilent();
     else if(curPage==='outgoing')renderOutgoingSilent();
     else if(curPage==='incoming')renderIncomingSilent();
     else if(curPage==='documents')renderDocumentsSilent();
   }catch(e){ setConnStatus('error'); }
-}
-setInterval(silentRefreshInventory,60000);
-
-// ════════════════════════════════════════
-// GOODS PAGE
-// ════════════════════════════════════════
-function toggleLowFilter(){
-  lowStockFilter=!lowStockFilter;
-  document.getElementById('g-filter-low').classList.toggle('on',lowStockFilter);
-  renderGoods();
 }
 
 function renderGoodsSilent(){

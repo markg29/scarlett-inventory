@@ -446,6 +446,7 @@ img{display:block;max-width:100%;}
 
     <div class="sec-head" style="padding-top:6px;">
       <div class="sec-title">Stock Overview</div>
+      <button onclick="loadInventory()" style="height:30px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);color:var(--ink3);font-size:12px;font-weight:700;cursor:pointer;">🔄 I-reload</button>
     </div>
 
     <!-- Summary cards -->
@@ -591,6 +592,12 @@ img{display:block;max-width:100%;}
       <button class="m-save" id="gd-edit-btn" onclick="editGoodsFromDetails()">✎ I-edit</button>
     </div>
     <button id="gd-link-btn" onclick="openLinkModal()" style="width:100%;margin-top:10px;height:40px;border-radius:12px;border:1.5px solid var(--wine-600);background:transparent;color:var(--wine-600);font-size:13px;font-weight:700;cursor:pointer;">🔗 I-link sa OrderKo</button>
+
+    <!-- Item movement history -->
+    <div style="margin-top:14px;">
+      <div style="font-size:11px;font-weight:800;color:var(--ink3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">📋 Kasaysayan ng Galaw</div>
+      <div id="gd-history" style="max-height:220px;overflow-y:auto;border-radius:12px;border:1px solid var(--line);background:var(--surface);"></div>
+    </div>
   </div>
 </div>
 
@@ -976,7 +983,8 @@ function parseMovements(raw){
   return (raw||[]).map(r=>({
     id:String(r[0]||''),type:String(r[1]||''),date:fmtDate(r[2]),
     rawDate:String(r[2]||''),goodsItemId:String(r[3]||''),
-    itemName:String(r[4]||''),qty:parseFloat(r[5])||0,notes:String(r[6]||'')
+    itemName:String(r[4]||''),qty:parseFloat(r[5])||0,notes:String(r[6]||''),
+    batchId:String(r[7]||r[0]||'') // Column H = batchId, fallback to own id
   })).filter(m=>m.id);
 }
 
@@ -1385,6 +1393,31 @@ function openGoodsDetails(id){
   }
 
   openOverlay('mo-details');
+
+  // Render item movement history (most recent first, max 50)
+  const histEl = document.getElementById('gd-history');
+  if(histEl){
+    const itemMov = movements
+      .filter(m=>m.goodsItemId===id)
+      .sort((a,b)=>new Date(b.rawDate||b.date)-new Date(a.rawDate||a.date))
+      .slice(0,50);
+    if(!itemMov.length){
+      histEl.innerHTML='<div style="padding:12px 14px;font-size:13px;color:var(--ink3);">Wala pang record</div>';
+    }else{
+      histEl.innerHTML=itemMov.map((m,i)=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:9px 12px;${i<itemMov.length-1?'border-bottom:1px solid var(--line);':''}">
+          <div style="width:32px;height:32px;border-radius:8px;background:${m.type==='in'?'var(--okbg)':'var(--dangerbg)'};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">
+            ${m.type==='in'?'↓':'↑'}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:700;color:${m.type==='in'?'var(--ok)':'var(--danger)'};">
+              ${m.type==='in'?'+':'-'}${m.qty} ${g.unit||''}
+            </div>
+            <div style="font-size:11px;color:var(--ink3);">${m.date}${m.notes?' · '+m.notes:''}</div>
+          </div>
+        </div>`).join('');
+    }
+  }
 }
 
 function editGoodsFromDetails(){
@@ -1539,44 +1572,47 @@ function renderMovementList(type){
     return;
   }
 
-  // Group by rawDate, sections in latest-first order (list is already sorted)
+  // Group by batchId — batch transactions show as one card, solo as individual
   const groups=[];
-  let curGroup=null;
+  const seen=new Map();
   list.forEach(m=>{
-    if(!curGroup||curGroup.rawDate!==m.rawDate){
-      curGroup={rawDate:m.rawDate,date:m.date,rows:[]};
-      groups.push(curGroup);
+    const key=m.batchId||m.id; // fallback to id for old records without batchId
+    if(!seen.has(key)){
+      const grp={batchId:key,rawDate:m.rawDate,date:m.date,notes:m.notes,rows:[]};
+      seen.set(key,grp);
+      groups.push(grp);
     }
-    curGroup.rows.push(m);
+    seen.get(key).rows.push(m);
   });
 
   document.getElementById(wrapId).innerHTML=
     groups.map(g=>{
-      const dayTotal=g.rows.reduce((s,m)=>s+m.qty,0);
-      return `<div style="padding:0 18px 6px;display:flex;align-items:baseline;justify-content:space-between;">
-        <div style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.4px;">${g.date}</div>
-        <div style="font-size:11.5px;font-weight:700;color:${type==='out'?'var(--danger)':'var(--ok)'};">${type==='out'?'−':'+'}${dayTotal} units</div>
-      </div>`+
-      g.rows.map(m=>{
-        const mg=goods.find(x=>x.id===m.goodsItemId);
-        const munit=mg&&mg.unit?' '+mg.unit:'';
-        const thumb=mg&&mg.imageUrl
-          ? `<img src="${mg.imageUrl}" style="width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="m-ic ${type}" style="display:none;">${type==='out'?'📤':'📥'}</div>`
-          : `<div class="m-ic ${type}">${type==='out'?'📤':'📥'}</div>`;
-        return `<div class="m-card">
-        ${thumb}
-        <div class="m-info">
-          <div class="m-name">${m.itemName}</div>
-          <div class="m-meta">${m.notes||''}</div>
-        </div>
-        <div class="m-qty ${type}">${type==='out'?'−':'+'}${m.qty}${munit}</div>
-        <div class="m-actions">
-          <button class="m-act-btn" onclick="openEditMovement('${E(m.id)}')">✎</button>
-          <button class="m-act-btn" onclick="askDeleteMovement('${E(m.id)}','${E(m.itemName)}')">🗑</button>
-        </div>
-      </div>`;
-      }).join('');
-    }).join('<div style="height:14px;"></div>');
+      const batchTotal=g.rows.reduce((s,m)=>s+m.qty,0);
+      const isBatch=g.rows.length>1;
+      return '<div style="margin:0 14px 12px;background:var(--white);border-radius:14px;border:1px solid var(--line);overflow:hidden;">'
+        +'<div style="padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+        +'<div><div style="font-size:12px;font-weight:800;color:var(--ink2);">'+g.date+(isBatch?' · <span style=\"color:var(--brand)\">Batch ('+g.rows.length+' items)</span>':'')+'</div>'
+        +(g.notes?'<div style="font-size:11px;color:var(--ink3);margin-top:2px;">📝 '+g.notes+'</div>':'')
+        +'</div>'
+        +'<div style="font-size:14px;font-weight:800;color:'+(type==='out'?'var(--danger)':'var(--ok)')+';">'+( type==='out'?'−':'+' )+batchTotal+' units</div>'
+        +'</div>'
+        +g.rows.map(m=>{
+          const mg=goods.find(x=>x.id===m.goodsItemId);
+          const munit=mg&&mg.unit?' '+mg.unit:'';
+          const thumb=mg&&mg.imageUrl
+            ? '<img src="'+mg.imageUrl+'" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'"/>'
+            : '<div class="m-ic '+type+'">'+(type==='out'?'📤':'📥')+'</div>';
+          return '<div class="m-card" style="border-radius:0;border-top:1px solid var(--line);">'
+            +thumb
+            +'<div class="m-info"><div class="m-name">'+m.itemName+'</div></div>'
+            +'<div class="m-qty '+type+'">'+(type==='out'?'−':'+')+m.qty+munit+'</div>'
+            +'<div class="m-actions">'
+            +'<button class="m-act-btn" onclick="openEditMovement(\''+E(m.id)+'\')">✎</button>'
+            +'<button class="m-act-btn" onclick="askDeleteMovement(\''+E(m.id)+'\',\''+E(m.itemName)+'\')">🗑</button>'
+            +'</div></div>';
+        }).join('')
+        +'</div>';
+    }).join('');
 }
 
 function renderOutgoing(){renderMovementList('out');}
@@ -1712,7 +1748,7 @@ async function saveMovement(){
       const newId=genMovementId(type);
       // Optimistic update — update local first, then sync to server
       g.quantity+=(type==='in'?qty:-qty);
-      movements.push({id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,notes,date:fmtDate(date),rawDate:date});
+      movements.push({id:newId,batchId:newId,type,goodsItemId:goodsId,itemName:g.name,qty,notes,date:fmtDate(date),rawDate:date});
       closeOverlay('mo-movement');
       renderGoods();renderOutgoing();renderIncoming();
       showSaveSuccess((type==='out'?'Paglabas':'Pagpasok')+' na-record!');
@@ -1818,10 +1854,13 @@ async function saveBatchMovement(){
   btn.textContent='Nag-se-save...';btn.disabled=true;
 
   try{
+    // One batchId for the whole transaction
+    const batchId = genMovementId(type);
     const items=entries.map(([goodsId,qty])=>{
       const g=goods.find(x=>x.id===goodsId);
       return {
-        id:genMovementId(type),
+        id:genMovementId(type), // unique per row for idempotency
+        batchId,                // shared across the batch
         type, goodsItemId:goodsId,
         itemName:g?g.name:'', qty, date, notes
       };
@@ -1831,7 +1870,7 @@ async function saveBatchMovement(){
     items.forEach(m=>{
       const g=goods.find(x=>x.id===m.goodsItemId);
       if(g)g.quantity+=(type==='in'?m.qty:-m.qty);
-      movements.push({id:m.id,type,goodsItemId:m.goodsItemId,itemName:m.itemName,qty:m.qty,notes,date:fmtDate(date),rawDate:date});
+      movements.push({id:m.id,batchId:m.batchId,type,goodsItemId:m.goodsItemId,itemName:m.itemName,qty:m.qty,notes,date:fmtDate(date),rawDate:date});
     });
     closeOverlay('mo-batch');
     renderGoods();renderOutgoing();renderIncoming();

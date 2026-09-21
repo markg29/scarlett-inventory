@@ -988,6 +988,60 @@ function parseMovements(raw){
   })).filter(m=>m.id);
 }
 
+// ── Sync Retry Queue ─────────────────────────────────────────
+let _syncQueue = [];
+let _syncRetrying = false;
+
+async function queueSync(payload){
+  try{
+    await apiPost(payload);
+  }catch(e){
+    _syncQueue.push({payload, attempts:1});
+    showSyncWarning();
+    setTimeout(retrySyncQueue, 5000); // first retry after 5s
+  }
+}
+
+function showSyncWarning(){
+  if(document.getElementById('sync-warning-bar')) { updateSyncWarning(); return; }
+  const bar = document.createElement('div');
+  bar.id = 'sync-warning-bar';
+  bar.style.cssText = 'position:fixed;top:var(--NAV,56px);left:0;right:0;z-index:800;background:#f59e0b;color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;';
+  bar.innerHTML = '<span>⚠️ <span id="sync-warn-count">1</span> record hindi pa nase-save</span>'
+    +'<button onclick="retrySyncQueue()" style="height:28px;padding:0 12px;border-radius:999px;border:none;background:#fff;color:#d97706;font-size:12px;font-weight:800;cursor:pointer;">I-retry</button>';
+  document.body.appendChild(bar);
+}
+
+function updateSyncWarning(){
+  if(!_syncQueue.length){ document.getElementById('sync-warning-bar')?.remove(); return; }
+  const cnt = document.getElementById('sync-warn-count');
+  if(cnt) cnt.textContent = _syncQueue.length;
+}
+
+async function retrySyncQueue(){
+  if(_syncRetrying || !_syncQueue.length) return;
+  _syncRetrying = true;
+  const btn = document.querySelector('#sync-warning-bar button');
+  if(btn) btn.textContent = 'Nag-re-retry...';
+  const toRetry = [..._syncQueue];
+  _syncQueue = [];
+  for(const item of toRetry){
+    try{ await apiPost(item.payload); }
+    catch(e){ item.attempts++; _syncQueue.push(item); }
+  }
+  _syncRetrying = false;
+  if(_syncQueue.length){
+    updateSyncWarning();
+    if(btn) btn.textContent = 'I-retry';
+  }else{
+    updateSyncWarning();
+    toast('✅ Lahat na-sync na!','ok');
+    silentRefreshInventory();
+  }
+}
+
+setInterval(()=>{ if(_syncQueue.length && !_syncRetrying) retrySyncQueue(); }, 30000);
+
 async function loadInventory(){
   // Show cached data instantly while fetching fresh data
   try{
@@ -1744,8 +1798,7 @@ async function saveMovement(){
       closeOverlay('mo-movement');
       renderGoods();renderOutgoing();renderIncoming();
       showSaveSuccess((type==='out'?'Paglabas':'Pagpasok')+' na-record!');
-      apiPost({action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes})
-        .catch(e=>toast('⚠️ Sync delayed','warn'));
+      queueSync({action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes});
     }
   }catch(e){
     toast('❌ '+e.message,'err');
@@ -1868,8 +1921,7 @@ async function saveBatchMovement(){
     renderGoods();renderOutgoing();renderIncoming();
     showSaveSuccess(`${items.length} produkto na-${type==='out'?'bawas':'dagdag'}!`);
     batchQty={};
-    apiPost({action:'batchAddMovement',items})
-      .catch(e=>toast('⚠️ Sync delayed','warn'));
+    queueSync({action:'batchAddMovement',items});
   }catch(e){
     toast('❌ '+e.message,'err');
   }finally{

@@ -1710,20 +1710,19 @@ async function saveMovement(){
       showSaveSuccess('Na-update ang record!');
     }else{
       const newId=genMovementId(type);
-      await apiPost({action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes});
+      // Optimistic update — update local first, then sync to server
       g.quantity+=(type==='in'?qty:-qty);
       movements.push({id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,notes,date:fmtDate(date),rawDate:date});
       closeOverlay('mo-movement');
       renderGoods();renderOutgoing();renderIncoming();
       showSaveSuccess((type==='out'?'Paglabas':'Pagpasok')+' na-record!');
+      apiPost({action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes})
+        .catch(e=>toast('⚠️ Sync delayed','warn'));
     }
   }catch(e){
-    btn.textContent='May Error';
-    btn.disabled=false;
     toast('❌ '+e.message,'err');
-  }
-  finally{
-    if(btn.textContent==='Nag-se-save...'){btn.textContent='I-save';btn.disabled=false;}
+  }finally{
+    btn.textContent='I-save';btn.disabled=false;
   }
 }
 
@@ -1828,25 +1827,22 @@ async function saveBatchMovement(){
       };
     });
 
-    await apiPost({action:'batchAddMovement',items});
-
-    // Update local state
+    // Optimistic update — update local first, then sync to server
     items.forEach(m=>{
       const g=goods.find(x=>x.id===m.goodsItemId);
       if(g)g.quantity+=(type==='in'?m.qty:-m.qty);
       movements.push({id:m.id,type,goodsItemId:m.goodsItemId,itemName:m.itemName,qty:m.qty,notes,date:fmtDate(date),rawDate:date});
     });
-
     closeOverlay('mo-batch');
     renderGoods();renderOutgoing();renderIncoming();
     showSaveSuccess(`${items.length} produkto na-${type==='out'?'bawas':'dagdag'}!`);
     batchQty={};
+    apiPost({action:'batchAddMovement',items})
+      .catch(e=>toast('⚠️ Sync delayed','warn'));
   }catch(e){
-    btn.textContent='May Error';
-    btn.disabled=false;
     toast('❌ '+e.message,'err');
   }finally{
-    if(btn.textContent==='Nag-se-save...'){btn.textContent='I-save Batch';btn.disabled=false;}
+    btn.textContent='I-save Batch';btn.disabled=false;
   }
 }
 

@@ -1792,13 +1792,21 @@ async function saveMovement(){
       showSaveSuccess('Na-update ang record!');
     }else{
       const newId=genMovementId(type);
-      // Optimistic update — update local first, then sync to server
+      // Try to save to server first, then update local
+      let saved = false;
+      try{
+        await apiPost({action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes});
+        saved = true;
+      }catch(e){
+        _syncQueue.push({payload:{action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes}, attempts:1});
+        showSyncWarning();
+        setTimeout(retrySyncQueue, 5000);
+      }
       g.quantity+=(type==='in'?qty:-qty);
       movements.push({id:newId,batchId:newId,type,goodsItemId:goodsId,itemName:g.name,qty,notes,date:fmtDate(date),rawDate:date});
       closeOverlay('mo-movement');
       renderGoods();renderOutgoing();renderIncoming();
       showSaveSuccess((type==='out'?'Paglabas':'Pagpasok')+' na-record!');
-      queueSync({action:'addMovement',id:newId,type,goodsItemId:goodsId,itemName:g.name,qty,date,notes});
     }
   }catch(e){
     toast('❌ '+e.message,'err');
@@ -1899,19 +1907,30 @@ async function saveBatchMovement(){
   btn.textContent='Nag-se-save...';btn.disabled=true;
 
   try{
-    // One batchId for the whole transaction
     const batchId = genMovementId(type);
     const items=entries.map(([goodsId,qty])=>{
       const g=goods.find(x=>x.id===goodsId);
       return {
-        id:genMovementId(type), // unique per row for idempotency
-        batchId,                // shared across the batch
+        id:genMovementId(type),
+        batchId,
         type, goodsItemId:goodsId,
         itemName:g?g.name:'', qty, date, notes
       };
     });
 
-    // Optimistic update — update local first, then sync to server
+    // Try to save to server first
+    let saved = false;
+    try{
+      await apiPost({action:'batchAddMovement',items});
+      saved = true;
+    }catch(e){
+      // Failed — queue for retry but still update local
+      _syncQueue.push({payload:{action:'batchAddMovement',items}, attempts:1});
+      showSyncWarning();
+      setTimeout(retrySyncQueue, 5000);
+    }
+
+    // Update local state regardless
     items.forEach(m=>{
       const g=goods.find(x=>x.id===m.goodsItemId);
       if(g)g.quantity+=(type==='in'?m.qty:-m.qty);
@@ -1921,7 +1940,6 @@ async function saveBatchMovement(){
     renderGoods();renderOutgoing();renderIncoming();
     showSaveSuccess(`${items.length} produkto na-${type==='out'?'bawas':'dagdag'}!`);
     batchQty={};
-    queueSync({action:'batchAddMovement',items});
   }catch(e){
     toast('❌ '+e.message,'err');
   }finally{

@@ -734,7 +734,26 @@ img{display:block;max-width:100%;}
 
     <div class="modal-btns">
       <button class="m-cancel" onclick="closeOverlay('mo-batch')">Cancel</button>
-      <button class="m-save" id="mb-btn" onclick="saveBatchMovement()">I-save Batch</button>
+      <button class="m-save" id="mb-btn" onclick="openBatchReview()">I-review at I-save →</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: BATCH REVIEW -->
+<div class="overlay" id="mo-batch-review" onclick="closeOverlay('mo-batch-review',event)">
+  <div class="sheet" style="max-height:92vh;display:flex;flex-direction:column;padding-bottom:0;">
+    <div style="padding:0 18px;flex-shrink:0;">
+      <div class="sheet-handle"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div class="sheet-title" style="margin-bottom:0;" id="br-title">I-review ang Batch</div>
+        <button onclick="closeOverlay('mo-batch-review')" style="width:30px;height:30px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink3);font-size:16px;cursor:pointer;">✕</button>
+      </div>
+      <div id="br-summary" style="font-size:13px;color:var(--ink3);margin-bottom:12px;"></div>
+    </div>
+    <div id="br-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
+    <div style="padding:12px 18px 28px;background:var(--white);border-top:1px solid var(--line);flex-shrink:0;display:flex;gap:10px;">
+      <button onclick="closeOverlay('mo-batch-review')" style="flex:1;height:48px;border-radius:14px;border:1.5px solid var(--line);background:var(--white);font-size:14px;font-weight:700;cursor:pointer;">← Baguhin</button>
+      <button id="br-confirm-btn" onclick="saveBatchMovement()" style="flex:2;height:48px;border-radius:14px;border:none;font-size:15px;font-weight:700;cursor:pointer;color:#fff;">✓ I-confirm at I-save</button>
     </div>
   </div>
 </div>
@@ -1840,13 +1859,10 @@ function openBatchMovement(type){
 function renderBatchChecklist(){
   const q=(document.getElementById('mb-search').value||'').toLowerCase().trim();
   let list=[...goods];
-  // For outgoing: only show items with stock > 0
   if(batchType==='out')list=list.filter(g=>g.quantity>0);
   if(q)list=list.filter(g=>g.name.toLowerCase().includes(q)||g.barcode.toLowerCase().includes(q));
   list.sort((a,b)=>a.name.localeCompare(b.name));
-
   const outMode=batchType==='out';
-
   if(!list.length){
     document.getElementById('mb-checklist').innerHTML=`<div style="padding:20px;text-align:center;color:var(--ink3);font-size:13px;">Walang produktong nahanap.</div>`;
   }else{
@@ -1854,13 +1870,18 @@ function renderBatchChecklist(){
       const curVal=batchQty[g.id]||'';
       const hasVal=curVal!=='' && curVal>0;
       const isLow=g.minStockQty>0&&g.quantity<=g.minStockQty;
-      return `<div class="bc-row${hasVal?' active'+(outMode?' out-mode':''):''}">
-        <div class="bc-info">
+      const thumb=g.imageUrl
+        ?`<img src="${g.imageUrl}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'"/>`
+        :`<div style="width:40px;height:40px;border-radius:8px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">📦</div>`;
+      return `<div class="bc-row${hasVal?' active'+(outMode?' out-mode':''):''}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;">
+        ${thumb}
+        <div class="bc-info" style="flex:1;min-width:0;">
           <div class="bc-name">${g.name}</div>
           <div class="bc-stock${isLow?' low':''}">Stock: ${g.quantity}${g.unit?' '+g.unit:''}${isLow?' ⚠':''}</div>
         </div>
         <input class="bc-qty${hasVal?' has-val'+(outMode?' out-mode':''):''}" type="number" min="0"
           inputmode="numeric" placeholder="0" value="${curVal}"
+          style="width:60px;flex-shrink:0;"
           oninput="onBatchQtyChange('${E(g.id)}',this.value,this)"/>
       </div>`;
     }).join('');
@@ -1898,47 +1919,69 @@ function updateBatchSelectedCount(){
     n>0 ? `✓ ${n} produktong piniling i-${batchType==='out'?'bawas':'dagdag'}` : '';
 }
 
+function openBatchReview(){
+  const entries=Object.entries(batchQty).filter(([_,q])=>q>0);
+  if(!entries.length){toast('Walang quantity na nailagay!','err');return;}
+  const isOut=batchType==='out';
+  const color=isOut?'var(--danger)':'var(--ok)';
+  const sign=isOut?'−':'+';
+  const ic=isOut?'📤':'📥';
+  const total=entries.reduce((s,[_,q])=>s+q,0);
+
+  document.getElementById('br-title').textContent=(isOut?'I-review: Paglabas':'I-review: Pagpasok')+' ng Stock';
+  document.getElementById('br-summary').textContent=`${entries.length} items · ${sign}${total} units`;
+  document.getElementById('br-confirm-btn').style.background=isOut?'var(--danger)':'var(--ok)';
+
+  document.getElementById('br-list').innerHTML=entries.map(([id,qty])=>{
+    const g=goods.find(x=>x.id===id);
+    if(!g)return '';
+    const mu=g.unit?' '+g.unit:'';
+    const thumb=g.imageUrl
+      ?`<img src="${g.imageUrl}" style="width:42px;height:42px;border-radius:10px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'"/>`
+      :`<div style="width:42px;height:42px;border-radius:10px;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">${ic}</div>`;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--line);">
+      ${thumb}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;line-height:1.3;">${g.name}</div>
+        <div style="font-size:11px;color:var(--ink3);margin-top:2px;">Stock ngayon: ${g.quantity}${mu} → ${isOut?g.quantity-qty:g.quantity+qty}${mu}</div>
+      </div>
+      <div style="font-size:16px;font-weight:800;color:${color};flex-shrink:0;">${sign}${qty}${mu}</div>
+    </div>`;
+  }).join('');
+
+  openOverlay('mo-batch-review');
+}
+
 async function saveBatchMovement(){
   const entries=Object.entries(batchQty);
   if(!entries.length){toast('Walang quantity na nailagay!','err');return;}
-
   const date=document.getElementById('mb-date').value;
   const notes=document.getElementById('mb-notes').value.trim();
   const type=batchType;
-
-  const btn=document.getElementById('mb-btn');
-  btn.textContent='Nag-se-save...';btn.disabled=true;
-
+  const reviewOpen=document.getElementById('mo-batch-review')?.classList.contains('on');
+  const btn=reviewOpen?document.getElementById('br-confirm-btn'):document.getElementById('mb-btn');
+  if(btn){btn.textContent='Nag-se-save...';btn.disabled=true;}
   try{
-    const batchId = genMovementId(type);
+    const batchId=genMovementId(type);
     const items=entries.map(([goodsId,qty])=>{
       const g=goods.find(x=>x.id===goodsId);
-      return {
-        id:genMovementId(type),
-        batchId,
-        type, goodsItemId:goodsId,
-        itemName:g?g.name:'', qty, date, notes
-      };
+      return {id:genMovementId(type),batchId,type,goodsItemId:goodsId,itemName:g?g.name:'',qty,date,notes};
     });
-
-    // Try to save to server first
-    let saved = false;
+    let failed=false;
     try{
       await apiPost({action:'batchAddMovement',items});
-      saved = true;
     }catch(e){
-      // Failed — queue for retry but still update local
-      _syncQueue.push({payload:{action:'batchAddMovement',items}, attempts:1});
+      _syncQueue.push({payload:{action:'batchAddMovement',items},attempts:1});
       showSyncWarning();
-      setTimeout(retrySyncQueue, 5000);
+      setTimeout(retrySyncQueue,5000);
+      failed=true;
     }
-
-    // Update local state regardless
     items.forEach(m=>{
       const g=goods.find(x=>x.id===m.goodsItemId);
       if(g)g.quantity+=(type==='in'?m.qty:-m.qty);
       movements.push({id:m.id,batchId:m.batchId,type,goodsItemId:m.goodsItemId,itemName:m.itemName,qty:m.qty,notes,date:fmtDate(date),rawDate:date});
     });
+    closeOverlay('mo-batch-review');
     closeOverlay('mo-batch');
     renderGoods();renderOutgoing();renderIncoming();
     showSaveSuccess(`${items.length} produkto na-${type==='out'?'bawas':'dagdag'}!`);
@@ -1946,233 +1989,11 @@ async function saveBatchMovement(){
   }catch(e){
     toast('❌ '+e.message,'err');
   }finally{
-    btn.textContent='I-save Batch';btn.disabled=false;
+    if(btn){btn.disabled=false;btn.textContent=reviewOpen?'✓ I-confirm at I-save':'I-save Batch';}
   }
 }
 
-function askDeleteMovement(id,name){
-  document.getElementById('confirm-h').textContent='I-delete ang record na ito?';
-  document.getElementById('confirm-s').textContent=name+' — maibabalik ang stock sa dating dami nito. Hindi na mababawi.';
-  pendingDelete=async()=>{
-    closeOverlay('mo-confirm');
-    toast('Nag-de-delete...','');
-    try{
-      const m=movements.find(x=>x.id===id);
-      await apiPost({action:'deleteMovement',id});
-      if(m){
-        const g=goods.find(x=>x.id===m.goodsItemId);
-        if(g)g.quantity+=(m.type==='in'?-m.qty:m.qty);
-      }
-      movements=movements.filter(x=>x.id!==id);
-      renderGoods();renderOutgoing();renderIncoming();
-      showSaveSuccess('Record na-delete!');
-    }catch(e){toast('❌ '+e.message,'err');}
-  };
-  const cBtn=document.getElementById('confirm-btn');
-  cBtn.textContent='I-delete';
-  cBtn.onclick=()=>{if(pendingDelete){pendingDelete();pendingDelete=null;}};
-  openOverlay('mo-confirm');
-}
 
-// ════════════════════════════════════════
-// DOCUMENTS PAGE
-// ════════════════════════════════════════
-function renderDocumentsSilent(){
-  const pg=document.getElementById('pg-documents');
-  const saved=pg?pg.scrollTop:0;
-  renderDocuments();
-  if(pg)requestAnimationFrame(()=>pg.scrollTop=saved);
-}
-
-function renderDocuments(){
-  document.getElementById('doc-report-list').innerHTML=`
-    <div class="doc-card" onclick="openReport('stock')">
-      <div class="doc-ic">📊</div>
-      <div class="doc-info">
-        <div class="doc-title">Stock Summary</div>
-        <div class="doc-sub">Kabuuang listahan ng lahat ng produkto at stock</div>
-      </div>
-      <div class="doc-arrow">›</div>
-    </div>
-    <div class="doc-card" onclick="openReport('lowstock')">
-      <div class="doc-ic">⚠️</div>
-      <div class="doc-info">
-        <div class="doc-title">Low Stock Alert</div>
-        <div class="doc-sub">Mga produktong nasa o mababa sa minimum stock</div>
-      </div>
-      <div class="doc-arrow">›</div>
-    </div>
-    <div class="doc-card" onclick="openReport('movement')">
-      <div class="doc-ic">🔄</div>
-      <div class="doc-info">
-        <div class="doc-title">Movement History</div>
-        <div class="doc-sub">Buong kasaysayan ng incoming at outgoing</div>
-      </div>
-      <div class="doc-arrow">›</div>
-    </div>
-  `;
-
-  // Low stock quick-view widget
-  const low=goods.filter(g=>g.minStockQty>0&&g.quantity<=g.minStockQty);
-  if(!low.length){
-    document.getElementById('doc-lowstock-wrap').innerHTML=
-      `<div class="empty" style="padding:30px 20px;"><div class="empty-ic">✅</div><div class="empty-h">Maayos ang stock</div><div class="empty-b">Walang produktong mababa sa minimum stock ngayon.</div></div>`;
-  }else{
-    document.getElementById('doc-lowstock-wrap').innerHTML=
-      '<div style="display:flex;flex-direction:column;gap:8px;">'+
-      low.map(g=>`<div class="g-card" style="padding:11px 12px;">
-        <div class="g-thumb" style="width:40px;height:40px;font-size:18px;">${g.imageUrl?`<img src="${g.imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;" onerror="this.style.display='none'"/>`:'📦'}</div>
-        <div class="g-info">
-          <div class="g-name" style="font-size:13.5px;">${g.name}</div>
-          <div class="g-meta"><span class="pill danger">Min: ${g.minStockQty}</span></div>
-        </div>
-        <div class="g-stock low" style="font-size:15px;">${g.quantity}</div>
-      </div>`).join('')+
-      '</div>';
-  }
-}
-
-function openReport(type){
-  const now=new Date();
-  const dateStr=now.toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'});
-  let title='', rows='', headers='';
-
-  if(type==='stock'){
-    title='Stock Summary Report';
-    headers='<tr><th>Produkto</th><th>Barcode</th><th>Presyo</th><th>Stock</th><th>Halaga</th></tr>';
-    rows=goods.map(g=>`<tr>
-      <td>${g.name}</td>
-      <td>${g.barcode||'—'}</td>
-      <td>₱${g.price.toFixed(2)}</td>
-      <td>${g.quantity}</td>
-      <td>₱${(g.price*g.quantity).toFixed(2)}</td>
-    </tr>`).join('');
-    const totalVal=goods.reduce((s,g)=>s+g.price*g.quantity,0);
-    rows+=`<tr style="font-weight:700;border-top:2px solid #333;"><td colspan="4">Total Value</td><td>₱${totalVal.toFixed(2)}</td></tr>`;
-  }
-  else if(type==='lowstock'){
-    title='Low Stock Alert Report';
-    headers='<tr><th>Produkto</th><th>Kasalukuyang Stock</th><th>Minimum Stock</th><th>Kakulangan</th></tr>';
-    const low=goods.filter(g=>g.minStockQty>0&&g.quantity<=g.minStockQty);
-    rows=low.map(g=>`<tr>
-      <td>${g.name}</td>
-      <td>${g.quantity}</td>
-      <td>${g.minStockQty}</td>
-      <td style="color:#8c2a2a;font-weight:700;">${Math.max(0,g.minStockQty-g.quantity)}</td>
-    </tr>`).join('');
-    if(!low.length)rows='<tr><td colspan="4" style="text-align:center;color:#888;">Walang produktong mababa sa minimum stock.</td></tr>';
-  }
-  else if(type==='movement'){
-    title='Stock Movement History';
-    headers='<tr><th>Petsa</th><th>Tipo</th><th>Produkto</th><th>Qty</th><th>Notes</th></tr>';
-    const sorted=[...movements].sort((a,b)=>b.rawDate.localeCompare(a.rawDate));
-    rows=sorted.map(m=>`<tr>
-      <td>${m.date}</td>
-      <td style="color:${m.type==='in'?'#3f6b4a':'#8c2a2a'};font-weight:700;">${m.type==='in'?'Pagpasok':'Paglabas'}</td>
-      <td>${m.itemName}</td>
-      <td>${m.type==='in'?'+':'−'}${m.qty}</td>
-      <td>${m.notes||'—'}</td>
-    </tr>`).join('');
-    if(!sorted.length)rows='<tr><td colspan="5" style="text-align:center;color:#888;">Walang movement record.</td></tr>';
-  }
-
-  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/><title>${title}</title>
-  <style>
-    body{font-family:'Inter',Arial,sans-serif;padding:40px;color:#241616;max-width:800px;margin:0 auto;}
-    h1{font-family:Georgia,serif;font-size:24px;border-bottom:3px solid #7a1f2b;padding-bottom:12px;margin-bottom:4px;}
-    .sub{color:#888;font-size:13px;margin-bottom:24px;}
-    table{width:100%;border-collapse:collapse;font-size:13px;}
-    th{background:#2b1216;color:#f7f0e3;text-align:left;padding:10px 12px;font-weight:600;}
-    td{padding:9px 12px;border-bottom:1px solid #e3d6c0;}
-    tr:nth-child(even){background:#fbf7ef;}
-    @media print{body{padding:16px;}}
-  </style></head>
-  <body>
-    <h1>${title}</h1>
-    <div class="sub">Scarlett Inventory System · Ginawa noong ${dateStr}</div>
-    <table>${headers}${rows}</table>
-  </body></html>`;
-
-  const w=window.open('','_blank');
-  w.document.write(html);
-  w.document.close();
-  setTimeout(()=>w.print(),300);
-}
-
-// ════════════════════════════════════════
-// BOOT
-// ════════════════════════════════════════
-// Register Service Worker for PWA installability
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('./sw.js')
-    .then(reg => {
-      reg.update();
-      reg.addEventListener('updatefound', ()=>{
-        const newSW = reg.installing;
-        newSW?.addEventListener('statechange', ()=>{
-          if(newSW.state==='installed' && navigator.serviceWorker.controller){
-            newSW.postMessage('skipWaiting');
-          }
-        });
-      });
-      document.addEventListener('visibilitychange', ()=>{
-        if(document.visibilityState==='visible') reg.update();
-      });
-    })
-    .catch(()=>{});
-  navigator.serviceWorker.addEventListener('message', e=>{
-    if(e.data?.type==='sw-updated') showUpdateToast();
-  });
-  navigator.serviceWorker.ready.then(reg=>{
-    setInterval(()=>reg.update(), 2*60*1000);
-  });
-}
-document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState === 'visible'){
-    const dot = document.getElementById('conn-dot');
-    const bg = dot ? dot.style.background : '';
-    if(bg === '#ef4444' || bg === '#f59e0b'){
-      silentRefreshInventory();
-    }
-  }
-});
-// Use DOMContentLoaded to ensure all elements exist before running
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', async function(){
-    goPage('goods');
-    loadInventory();
-    // Load links and orderko items in parallel after inventory starts
-    await Promise.all([loadItemLinks(), loadOrderkoItems()]);
-  });
-}else{
-  goPage('goods');
-  loadInventory();
-  // Load links in background — will re-render when done
-  Promise.all([loadItemLinks(), loadOrderkoItems()]);
-}
-
-// ── Service Worker update detection ──────────────────────────────
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.ready.then(reg=>{
-    setInterval(()=>reg.update(), 5*60*1000);
-  });
-  navigator.serviceWorker.addEventListener('message', e=>{
-    if(e.data?.type==='sw-updated') showUpdateToast();
-  });
-}
-
-function showUpdateToast(){
-  if(document.getElementById('sw-update-toast')) return;
-  const el=document.createElement('div');
-  el.id='sw-update-toast';
-  el.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:var(--ink);color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap;';
-  el.innerHTML=`
-    <span style="font-size:13px;font-weight:600;">🆕 May bagong update!</span>
-    <button onclick="window.location.reload()" style="height:32px;padding:0 14px;border-radius:999px;border:none;background:#fff;color:var(--ink);font-size:12px;font-weight:700;cursor:pointer;">I-refresh</button>
-    <button onclick="this.parentElement.remove()" style="width:24px;height:24px;border-radius:50%;border:none;background:rgba(255,255,255,.2);color:#fff;font-size:14px;cursor:pointer;">✕</button>
-  `;
-  document.body.appendChild(el);
-}
 </script>
 
 <!-- ════════════════════════════════════════

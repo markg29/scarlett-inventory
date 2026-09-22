@@ -1481,7 +1481,14 @@ function renderGoods(){
   const q=(document.getElementById('goods-search').value||'').toLowerCase().trim();
   let list=[...goods];
   if(lowStockFilter)list=list.filter(g=>g.minStockQty>0&&g.quantity<=g.minStockQty);
-  if(q)list=list.filter(g=>g.name.toLowerCase().includes(q)||g.barcode.toLowerCase().includes(q));
+  if(q){
+    const words=q.toLowerCase().split(/\s+/).filter(Boolean);
+    list=list.filter(g=>{
+      const name=g.name.toLowerCase();
+      const barcode=(g.barcode||'').toLowerCase();
+      return words.every(w=>name.includes(w)||barcode.includes(w));
+    });
+  }
   // Sort: highest stock quantity first
   list.sort((a,b)=>b.quantity-a.quantity);
 
@@ -2068,7 +2075,14 @@ function renderBatchChecklist(){
   const q=(document.getElementById('mb-search').value||'').toLowerCase().trim();
   let list=[...goods];
   if(batchType==='out')list=list.filter(g=>g.quantity>0);
-  if(q)list=list.filter(g=>g.name.toLowerCase().includes(q)||g.barcode.toLowerCase().includes(q));
+  if(q){
+    const words=q.toLowerCase().split(/\s+/).filter(Boolean);
+    list=list.filter(g=>{
+      const name=g.name.toLowerCase();
+      const barcode=(g.barcode||'').toLowerCase();
+      return words.every(w=>name.includes(w)||barcode.includes(w));
+    });
+  }
   list.sort((a,b)=>a.name.localeCompare(b.name));
   const outMode=batchType==='out';
   if(!list.length){

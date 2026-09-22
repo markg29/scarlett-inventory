@@ -715,31 +715,41 @@ img{display:block;max-width:100%;}
      MODAL: BATCH STOCK MOVEMENT (checklist)
      ════════════════════════════════════════ -->
 <div class="overlay" id="mo-batch" onclick="closeOverlay('mo-batch',event)">
-  <div class="sheet" style="max-height:92vh;">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title" id="mb-title">Batch — Paglabas ng Stock</div>
-    <input type="hidden" id="mb-type"/>
+  <div class="sheet" id="mo-batch-sheet" style="max-height:92vh;display:flex;flex-direction:column;padding-bottom:0;">
+    <!-- Fixed top section -->
+    <div style="flex-shrink:0;padding:0 0 8px;">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title" id="mb-title">Batch — Paglabas ng Stock</div>
+      <input type="hidden" id="mb-type"/>
 
-    <div style="display:flex;gap:10px;margin-bottom:13px;">
-      <div style="flex:1;">
-        <div class="f-lbl">Petsa (para sa lahat)</div>
-        <input class="f-inp" id="mb-date" type="date" style="margin-bottom:0;"/>
+      <div style="display:flex;gap:10px;margin-bottom:13px;">
+        <div style="flex:1;">
+          <div class="f-lbl">Petsa (para sa lahat)</div>
+          <input class="f-inp" id="mb-date" type="date" style="margin-bottom:0;"/>
+        </div>
+      </div>
+      <div class="f-lbl">Notes <span style="font-weight:400;text-transform:none;color:var(--ink3);">(opsyonal, para sa lahat)</span></div>
+      <input class="f-inp" id="mb-notes" placeholder="Hal. Supplier, dahilan, atbp."/>
+
+      <input class="f-inp" id="mb-search" placeholder="🔍 Maghanap ng produkto..."
+        style="margin-bottom:6px;"
+        oninput="renderBatchChecklist()"
+        onfocus="scrollBatchToSearch()"/>
+
+      <div id="mb-selected-count" style="font-size:12px;font-weight:700;color:var(--wine-600);min-height:18px;"></div>
+    </div>
+
+    <!-- Scrollable checklist — takes remaining space -->
+    <div id="mb-checklist" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:12px;min-height:0;"></div>
+
+    <!-- Fixed footer -->
+    <div style="flex-shrink:0;padding:12px 0 max(20px,env(safe-area-inset-bottom,20px));background:var(--cream);">
+      <div class="modal-btns" style="margin:0;">
+        <button class="m-cancel" onclick="closeOverlay('mo-batch')">Cancel</button>
+        <button class="m-save" id="mb-btn" onclick="openBatchReview()">I-review at I-save →</button>
       </div>
     </div>
-    <div class="f-lbl">Notes <span style="font-weight:400;text-transform:none;color:var(--ink3);">(opsyonal, para sa lahat)</span></div>
-    <input class="f-inp" id="mb-notes" placeholder="Hal. Supplier, dahilan, atbp."/>
-
-    <input class="f-inp" id="mb-search" placeholder="🔍 Maghanap ng produkto..." style="margin-bottom:10px;" oninput="renderBatchChecklist()"/>
-
-    <div id="mb-selected-count" style="font-size:12px;font-weight:700;color:var(--wine-600);margin-bottom:8px;"></div>
-
-    <div id="mb-checklist" style="border:1px solid var(--line);border-radius:12px;overflow:hidden;max-height:42vh;overflow-y:auto;margin-bottom:16px;"></div>
-
-    <div class="modal-btns">
-      <button class="m-cancel" onclick="closeOverlay('mo-batch')">Cancel</button>
-      <button class="m-save" id="mb-btn" onclick="openBatchReview()">I-review at I-save →</button>
-    </div>
-  </div>
+  </div></div>
 </div>
 
 <!-- MODAL: BATCH REVIEW -->
@@ -1557,7 +1567,7 @@ async function getGoodsImageData(){
 // ════════════════════════════════════════
 let currentDetailsId=null;
 
-function openGoodsDetails(id){
+async function openGoodsDetails(id){
   const g=goods.find(x=>x.id===id);
   if(!g)return;
   currentDetailsId=id;
@@ -1584,6 +1594,8 @@ function openGoodsDetails(id){
   const links=itemLinks[id];
   if(linkedSection){
     if(links&&links.size>0){
+      // Ensure orderko items are loaded before looking up names
+      if(!orderkoItems.length) await loadOrderkoItems();
       const linkedNames=[...links].map(orderkoId=>{
         const item=orderkoItems.find(i=>i.id===orderkoId);
         return item?item.name:orderkoId;
@@ -2009,6 +2021,35 @@ async function saveMovement(){
 // ════════════════════════════════════════
 let batchType=null;
 let batchQty={}; // {goodsId: qty} — only entries with qty > 0 get saved
+
+// ── Batch modal keyboard handling ────────────────────────────
+function scrollBatchToSearch(){
+  // When keyboard opens, scroll so checklist is visible above keyboard
+  setTimeout(()=>{
+    const sheet = document.getElementById('mo-batch-sheet');
+    const search = document.getElementById('mb-search');
+    if(sheet && search){
+      search.scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+  }, 300);
+}
+
+// Adjust batch modal height when virtual keyboard opens/closes
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', ()=>{
+    const sheet = document.getElementById('mo-batch-sheet');
+    if(!sheet) return;
+    const vvh = window.visualViewport.height;
+    const winH = window.innerHeight;
+    // If keyboard is open (viewport shrunk by >100px), limit sheet height
+    if(winH - vvh > 100){
+      sheet.style.maxHeight = (vvh * 0.95) + 'px';
+    } else {
+      sheet.style.maxHeight = '92vh';
+    }
+  });
+}
+
 
 function openBatchMovement(type){
   batchType=type;

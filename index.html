@@ -771,7 +771,7 @@ img{display:block;max-width:100%;}
     <div style="font-size:13.5px;color:var(--ink2);line-height:1.5;margin-bottom:20px;" id="confirm-s"></div>
     <div class="modal-btns">
       <button class="m-cancel" onclick="closeOverlay('mo-confirm')">Hindi</button>
-      <button class="m-save" id="confirm-btn" style="background:var(--danger);">I-delete</button>
+      <button class="m-save" id="confirm-btn" onclick="if(pendingDelete)pendingDelete()" style="background:var(--danger);">I-delete</button>
     </div>
   </div>
 </div>
@@ -846,15 +846,17 @@ async function apiPost(b,_retry=0){
 }
 
 async function apiGet(params,_retry=0){
+  const controller=new AbortController();
+  const timeoutId=setTimeout(()=>controller.abort(), 20000); // 20s timeout
   try{
     const r=await fetch(API+'?'+new URLSearchParams(params),{
       redirect:'follow',
-      cache:'no-store'
+      cache:'no-store',
+      signal:controller.signal
     });
-    // Apps Script sometimes returns redirect that looks like 404 temporarily
-    // If status is bad but not a real error, retry once after short delay
+    clearTimeout(timeoutId);
     if(!r.ok){
-      if(_retry<2){
+      if(_retry<1){ // only 1 retry
         await new Promise(res=>setTimeout(res,1000));
         return apiGet(params,_retry+1);
       }
@@ -866,8 +868,10 @@ async function apiGet(params,_retry=0){
     if(!d.ok)throw new Error(d.error||'Server error');
     return d;
   }catch(e){
-    if(_retry<2&&(e.name==='TypeError'||String(e).includes('fetch'))){
-      await new Promise(res=>setTimeout(res,1500));
+    clearTimeout(timeoutId);
+    if(e.name==='AbortError') throw new Error('Timeout — pakicheck ang koneksyon.');
+    if(_retry<1&&(e.name==='TypeError'||String(e).includes('fetch'))){
+      await new Promise(res=>setTimeout(res,1000));
       return apiGet(params,_retry+1);
     }
     throw e;

@@ -1774,7 +1774,7 @@ function renderMovementList(type){
   document.getElementById(wrapId).innerHTML=groups.map((g,gi)=>{
     const tot=g.rows.reduce((s,m)=>s+m.qty,0);
     const isBatch=g.rows.length>1;
-    const gid='mvg'+gi;
+    const gid=type[0]+'mvg'+gi;
     const rows=g.rows.map(m=>{
       const mg=goods.find(x=>x.id===m.goodsItemId);
       const mu=mg&&mg.unit?' '+mg.unit:'';

@@ -770,8 +770,8 @@ img{display:block;max-width:100%;}
     <div class="sheet-title" id="confirm-h">I-delete?</div>
     <div style="font-size:13.5px;color:var(--ink2);line-height:1.5;margin-bottom:20px;" id="confirm-s"></div>
     <div class="modal-btns">
-      <button class="m-cancel" onclick="closeOverlay('mo-confirm')">Hindi</button>
-      <button class="m-save" id="confirm-btn" onclick="if(pendingDelete)pendingDelete()" style="background:var(--danger);">I-delete</button>
+      <button class="m-cancel" onclick="pendingDelete=null;closeOverlay('mo-confirm')">Hindi</button>
+      <button class="m-save" id="confirm-btn" onclick="if(pendingDelete){const fn=pendingDelete;pendingDelete=null;fn();}" style="background:var(--danger);">I-delete</button>
     </div>
   </div>
 </div>
@@ -1177,11 +1177,14 @@ function askDeleteBatch(batchId, itemCount){
     toast('Nag-de-delete...','');
     try{
       const batchMovements=movements.filter(m=>(m.batchId||m.id)===batchId);
+      if(!batchMovements.length){ toast('Walang nahanap na record.','err'); return; }
+      // Single API call for entire batch
+      await apiPost({action:'batchDeleteMovement', ids: batchMovements.map(m=>m.id)});
+      // Revert local qty
       batchMovements.forEach(m=>{
         const g=goods.find(x=>x.id===m.goodsItemId);
         if(g) g.quantity+=(m.type==='in'?-m.qty:m.qty);
       });
-      await Promise.all(batchMovements.map(m=>apiPost({action:'deleteMovement',id:m.id})));
       movements=movements.filter(m=>(m.batchId||m.id)!==batchId);
       renderGoods();renderOutgoing();renderIncoming();
       toast(`Na-delete na ang batch (${batchMovements.length} items) ✓`,'ok');

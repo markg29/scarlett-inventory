@@ -1604,26 +1604,31 @@ async function openGoodsDetails(id){
   document.getElementById('gd-barcode').textContent=g.barcode||'—';
   document.getElementById('gd-min').textContent=g.minStockQty>0?(g.minStockQty+(g.unit?' '+g.unit:'')):'—';
 
-  // Show linked OrderKo items
+  // Open modal immediately — don't wait for OrderKo items
+  openOverlay('mo-details');
+
+  // Load linked OrderKo item names (in background if not yet loaded)
   const linkedSection=document.getElementById('gd-linked-section');
   const links=itemLinks[id];
   if(linkedSection){
     if(links&&links.size>0){
-      // Ensure orderko items are loaded before looking up names
-      if(!orderkoItems.length) await loadOrderkoItems();
-      const linkedNames=[...links].map(orderkoId=>{
-        const item=orderkoItems.find(i=>i.id===orderkoId);
-        return item?item.name:orderkoId;
-      });
       linkedSection.style.display='block';
+      // Show IDs immediately, replace with names once loaded
       document.getElementById('gd-linked-items').innerHTML=
-        linkedNames.map(name=>`<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2);">🔗 ${name}</div>`).join('');
+        [...links].map(oid=>`<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink2);">🔗 <span id="link-name-${oid}">${oid}</span></div>`).join('');
+      // Load names in background
+      (async()=>{
+        if(!orderkoItems.length) await loadOrderkoItems();
+        [...links].forEach(oid=>{
+          const item=orderkoItems.find(i=>i.id===oid);
+          const el=document.getElementById('link-name-'+oid);
+          if(el&&item) el.textContent=item.name;
+        });
+      })();
     }else{
       linkedSection.style.display='none';
     }
   }
-
-  openOverlay('mo-details');
 
   // Render item movement history (most recent first, max 50)
   const histEl = document.getElementById('gd-history');

@@ -446,7 +446,7 @@ img{display:block;max-width:100%;}
 
     <div class="sec-head" style="padding-top:6px;">
       <div class="sec-title">Stock Overview</div>
-      <button onclick="loadInventory()" style="height:30px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);color:var(--ink3);font-size:12px;font-weight:700;cursor:pointer;">🔄 I-reload</button>
+      <button onclick="hardReload()" style="height:30px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--white);color:var(--ink3);font-size:12px;font-weight:700;cursor:pointer;">🔄 I-reload</button>
     </div>
 
     <!-- Summary cards -->
@@ -1076,6 +1076,41 @@ document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState==='visible') silentRefreshInventory();
 });
 
+async function hardReload(){
+  try{ localStorage.removeItem('scarlett_cache'); }catch(e){}
+  goods=[];movements=[];
+  setConnStatus('checking');
+  document.getElementById('goods-wrap').innerHTML='<div class="cload"><div class="spin"></div><div style="font-size:13px;color:var(--ink3);margin-top:10px;">Naglo-load...</div></div>';
+  await loadInventory();
+  await loadItemLinks();
+  toast('Na-refresh na ang data ✓','ok');
+}
+
+function askDeleteBatch(batchId, itemCount){
+  document.getElementById('confirm-h').textContent='I-delete ang buong batch?';
+  document.getElementById('confirm-s').textContent=`${itemCount} items ang matatanggal at maibabalik ang stock.`;
+  const cBtn=document.getElementById('confirm-btn');
+  if(cBtn){cBtn.style.display='';cBtn.textContent='I-delete Lahat';}
+  pendingDelete=async()=>{
+    closeOverlay('mo-confirm');
+    toast('Nag-de-delete...','');
+    try{
+      const batchMovements=movements.filter(m=>(m.batchId||m.id)===batchId);
+      batchMovements.forEach(m=>{
+        const g=goods.find(x=>x.id===m.goodsItemId);
+        if(g) g.quantity+=(m.type==='in'?-m.qty:m.qty);
+      });
+      await Promise.all(batchMovements.map(m=>apiPost({action:'deleteMovement',id:m.id})));
+      movements=movements.filter(m=>(m.batchId||m.id)!==batchId);
+      renderGoods();renderOutgoing();renderIncoming();
+      toast(`Na-delete na ang batch (${batchMovements.length} items) ✓`,'ok');
+    }catch(e){
+      toast('❌ '+e.message,'err');
+    }
+  };
+  openOverlay('mo-confirm');
+}
+
 async function loadInventory(){
   const hasCached = !!localStorage.getItem('scarlett_cache');
   // Show cached data instantly
@@ -1686,7 +1721,8 @@ function renderMovementList(type){
           <div style="font-size:15px;font-weight:800;color:${color};">${sign}${tot}</div>
           <div style="font-size:10px;color:var(--ink3);">units</div>
         </div>
-        <div id="${gid}-ch" style="color:var(--ink3);font-size:18px;font-weight:300;flex-shrink:0;transition:transform .2s;">${isBatch?'›':'›'}</div>
+        <div id="${gid}-ch" style="color:var(--ink3);font-size:18px;font-weight:300;flex-shrink:0;transition:transform .2s;">›</div>
+        ${isBatch?`<button onclick="event.stopPropagation();askDeleteBatch('${g.batchId}',${g.rows.length})" style="width:30px;height:30px;border-radius:8px;border:none;background:var(--dangerbg);color:var(--danger);font-size:14px;cursor:pointer;flex-shrink:0;">🗑</button>`:''}
       </div>
       <div id="${gid}" style="display:${isBatch?'none':'block'};">${rows}</div>
     </div>`;

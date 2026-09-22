@@ -1069,8 +1069,8 @@ async function loadInventory(){
       const c=JSON.parse(cached);
       goods=c.goods||[];
       movements=c.movements||[];
+      setConnStatus('ok'); // show connected while background fetch runs
       renderGoods();
-      // Defer movement renders - goods is most important
       requestAnimationFrame(()=>{
         renderOutgoing();
         renderIncoming();
@@ -1119,7 +1119,11 @@ async function silentRefreshInventory(){
     else if(curPage==='outgoing')renderOutgoingSilent();
     else if(curPage==='incoming')renderIncomingSilent();
     else if(curPage==='documents')renderDocumentsSilent();
-  }catch(e){ setConnStatus('error'); }
+  }catch(e){
+    // Only show offline if we haven't successfully loaded yet
+    if(!goods.length) setConnStatus('error');
+    // else stay as 'ok' — silent refresh failure shouldn't disrupt user
+  }
 }
 
 function renderGoodsSilent(){

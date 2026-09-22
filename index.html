@@ -554,8 +554,11 @@ img{display:block;max-width:100%;}
      MODAL: GOODS DETAILS (tap a card to open)
      ════════════════════════════════════════ -->
 <div class="overlay" id="mo-details" onclick="closeOverlay('mo-details',event)">
-  <div class="sheet">
-    <div class="sheet-handle"></div>
+  <div class="sheet" style="padding-bottom:max(20px,env(safe-area-inset-bottom,20px));">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div class="sheet-handle" style="margin:0;"></div>
+      <button onclick="closeOverlay('mo-details')" style="width:32px;height:32px;border-radius:50%;border:1.5px solid var(--line);background:var(--surface);color:var(--ink3);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">✕</button>
+    </div>
     <div id="gd-img-wrap" style="width:100%;height:220px;border-radius:14px;background:var(--parchment-dim);display:flex;align-items:center;justify-content:center;font-size:64px;margin-bottom:16px;overflow:hidden;"></div>
 
     <div id="gd-name" style="font-family:var(--serif);font-size:20px;font-weight:600;color:var(--ink);margin-bottom:4px;"></div>
@@ -1711,6 +1714,33 @@ function renderIncomingSilent(){
   renderIncoming();
   if(pg)requestAnimationFrame(()=>pg.scrollTop=saved);
 }
+
+function askDeleteMovement(id, name){
+  document.getElementById('confirm-h').textContent = 'I-delete ang record na ito?';
+  document.getElementById('confirm-s').textContent = name + ' — maibabalik ang stock sa dating halaga.';
+  const cBtn = document.getElementById('confirm-btn');
+  if(cBtn){ cBtn.style.display=''; cBtn.textContent='I-delete'; }
+  pendingDelete = async () => {
+    closeOverlay('mo-confirm');
+    toast('Nag-de-delete...','');
+    try{
+      await apiPost({action:'deleteMovement', id});
+      // Revert qty change locally
+      const m = movements.find(x=>x.id===id);
+      if(m){
+        const g = goods.find(x=>x.id===m.goodsItemId);
+        if(g) g.quantity += (m.type==='in' ? -m.qty : m.qty);
+      }
+      movements = movements.filter(x=>x.id!==id);
+      renderGoods(); renderOutgoing(); renderIncoming();
+      toast('Na-delete na ang record ✓','ok');
+    }catch(e){
+      toast('❌ '+e.message,'err');
+    }
+  };
+  openOverlay('mo-confirm');
+}
+
 
 function openMovement(type){
   editingMovementId=null;

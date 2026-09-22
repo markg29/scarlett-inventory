@@ -480,6 +480,10 @@ img{display:block;max-width:100%;}
 
   <div id="outgoing-summary" style="padding:0 18px 16px;"></div>
 
+  <div style="padding:0 18px 10px;">
+    <input id="outgoing-search" class="f-inp" placeholder="🔍 Maghanap ng item o petsa..." style="margin:0;" oninput="renderOutgoing()"/>
+  </div>
+
   <div class="sec-head">
     <div class="sec-title" style="font-size:17px;">Kasaysayan</div>
     <div class="sec-link" id="outgoing-count"></div>
@@ -500,6 +504,10 @@ img{display:block;max-width:100%;}
   </div>
 
   <div id="incoming-summary" style="padding:0 18px 16px;"></div>
+
+  <div style="padding:0 18px 10px;">
+    <input id="incoming-search" class="f-inp" placeholder="🔍 Maghanap ng item o petsa..." style="margin:0;" oninput="renderIncoming()"/>
+  </div>
 
   <div class="sec-head">
     <div class="sec-title" style="font-size:17px;">Kasaysayan</div>
@@ -1761,10 +1769,25 @@ function renderMovementList(type){
   const sumId=type==='out'?'outgoing-summary':'incoming-summary';
   const countId=type==='out'?'outgoing-count':'incoming-count';
   const list=movements.filter(m=>m.type===type).sort((a,b)=>b.rawDate.localeCompare(a.rawDate));
-  const totalQty=list.reduce((s,m)=>s+m.qty,0);
+  // Word-based search filter
+  const searchId=type==='out'?'outgoing-search':'incoming-search';
+  const q=(document.getElementById(searchId)?.value||'').trim().toLowerCase();
+  const filtered = q
+    ? (() => {
+        const words = q.split(/\s+/).filter(Boolean);
+        // Filter groups where any item matches all words
+        return list.filter(m => {
+          const name = m.itemName.toLowerCase();
+          const date = m.date.toLowerCase();
+          const notes = (m.notes||'').toLowerCase();
+          return words.every(w => name.includes(w) || date.includes(w) || notes.includes(w));
+        });
+      })()
+    : list;
+  const totalQty=filtered.reduce((s,m)=>s+m.qty,0);
   const today=new Date();
   const weekAgo=new Date(today);weekAgo.setDate(today.getDate()-7);
-  const weekQty=list.filter(m=>{const d=new Date(m.rawDate);return !isNaN(d.getTime())&&d>=weekAgo;}).reduce((s,m)=>s+m.qty,0);
+  const weekQty=filtered.filter(m=>{const d=new Date(m.rawDate);return !isNaN(d.getTime())&&d>=weekAgo;}).reduce((s,m)=>s+m.qty,0);
   document.getElementById(sumId).innerHTML=`
     <div style="display:flex;gap:10px;">
       <div class="sum-card" style="background:var(--wine-900)">
@@ -1778,13 +1801,13 @@ function renderMovementList(type){
         <div class="sum-lbl">Ngayong Linggo</div>
       </div>
     </div>`;
-  document.getElementById(countId).textContent=list.length+' record'+(list.length!==1?'s':'');
-  if(!list.length){
+  document.getElementById(countId).textContent=filtered.length+' record'+(filtered.length!==1?'s':'');
+  if(!filtered.length){
     document.getElementById(wrapId).innerHTML=`<div class="empty"><div class="empty-ic">${type==='out'?'📤':'📥'}</div><div class="empty-h">Wala pang record</div><div class="empty-b">I-tap ang button sa ibaba para magdagdag.</div></div>`;
     return;
   }
   const groups=[];const seen=new Map();
-  list.forEach(m=>{
+  filtered.forEach(m=>{
     const key=m.batchId||m.id;
     if(!seen.has(key)){const grp={batchId:key,rawDate:m.rawDate,date:m.date,notes:m.notes,rows:[]};seen.set(key,grp);groups.push(grp);}
     seen.get(key).rows.push(m);

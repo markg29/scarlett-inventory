@@ -1,5 +1,5 @@
 // sw.js — Scarlett Inventory Service Worker
-const CACHE = 'scarlett-v4';
+const CACHE = 'scarlett-v20260923';
 
 self.addEventListener('install', e => {
   self.skipWaiting();

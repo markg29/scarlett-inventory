@@ -729,20 +729,22 @@ img{display:block;max-width:100%;}
       <div class="sheet-handle"></div>
       <div class="sheet-title" id="mb-title">Batch — Paglabas ng Stock</div>
       <input type="hidden" id="mb-type"/>
-
-      <div style="display:flex;gap:10px;margin-bottom:13px;">
-        <div style="flex:1;">
-          <div class="f-lbl">Petsa (para sa lahat)</div>
-          <input class="f-inp" id="mb-date" type="date" style="margin-bottom:0;"/>
+      <div id="mb-top-fields">
+        <div style="display:flex;gap:10px;margin-bottom:13px;">
+          <div style="flex:1;">
+            <div class="f-lbl">Petsa (para sa lahat)</div>
+            <input class="f-inp" id="mb-date" type="date" style="margin-bottom:0;"/>
+          </div>
         </div>
+        <div class="f-lbl">Notes <span style="font-weight:400;text-transform:none;color:var(--ink3);">(opsyonal, para sa lahat)</span></div>
+        <input class="f-inp" id="mb-notes" placeholder="Hal. Supplier, dahilan, atbp."/>
       </div>
-      <div class="f-lbl">Notes <span style="font-weight:400;text-transform:none;color:var(--ink3);">(opsyonal, para sa lahat)</span></div>
-      <input class="f-inp" id="mb-notes" placeholder="Hal. Supplier, dahilan, atbp."/>
 
       <input class="f-inp" id="mb-search" placeholder="🔍 Maghanap ng produkto..."
         style="margin-bottom:6px;"
         oninput="renderBatchChecklist()"
-        onfocus="scrollBatchToSearch()"/>
+        onfocus="scrollBatchToSearch();document.getElementById('mb-top-fields').style.display='none';"
+        onblur="setTimeout(()=>{document.getElementById('mb-top-fields').style.display='';},200)"/>
 
       <div id="mb-selected-count" style="font-size:12px;font-weight:700;color:var(--wine-600);min-height:18px;"></div>
     </div>
@@ -2059,13 +2061,9 @@ let batchQty={}; // {goodsId: qty} — only entries with qty > 0 get saved
 
 // ── Batch modal keyboard handling ────────────────────────────
 function scrollBatchToSearch(){
-  // When keyboard opens, scroll so checklist is visible above keyboard
   setTimeout(()=>{
-    const sheet = document.getElementById('mo-batch-sheet');
     const search = document.getElementById('mb-search');
-    if(sheet && search){
-      search.scrollIntoView({behavior:'smooth', block:'nearest'});
-    }
+    if(search) search.scrollIntoView({behavior:'smooth', block:'nearest'});
   }, 300);
 }
 
@@ -2076,9 +2074,16 @@ if(window.visualViewport){
     if(!sheet) return;
     const vvh = window.visualViewport.height;
     const winH = window.innerHeight;
-    // If keyboard is open (viewport shrunk by >100px), limit sheet height
-    if(winH - vvh > 100){
-      sheet.style.maxHeight = (vvh * 0.95) + 'px';
+    const keyboardOpen = winH - vvh > 100;
+    if(keyboardOpen){
+      // Shrink sheet to fit above keyboard
+      const topOffset = window.visualViewport.offsetTop || 0;
+      sheet.style.maxHeight = (vvh - topOffset - 10) + 'px';
+      // After resize, scroll checklist into best position
+      setTimeout(()=>{
+        const checklist = document.getElementById('mb-checklist');
+        if(checklist) checklist.scrollTop = 0;
+      }, 100);
     } else {
       sheet.style.maxHeight = '92vh';
     }

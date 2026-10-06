@@ -743,8 +743,7 @@ img{display:block;max-width:100%;}
       <input class="f-inp" id="mb-search" placeholder="🔍 Maghanap ng produkto..."
         style="margin-bottom:6px;"
         oninput="renderBatchChecklist()"
-        onfocus="scrollBatchToSearch();document.getElementById('mb-top-fields').style.display='none';"
-        onblur="setTimeout(()=>{document.getElementById('mb-top-fields').style.display='';},200)"/>
+        onfocus="scrollBatchToSearch();document.getElementById('mb-top-fields').style.display='none';"/>
 
       <div id="mb-selected-count" style="font-size:12px;font-weight:700;color:var(--wine-600);min-height:18px;"></div>
     </div>
@@ -2076,16 +2075,18 @@ if(window.visualViewport){
     const winH = window.innerHeight;
     const keyboardOpen = winH - vvh > 100;
     if(keyboardOpen){
-      // Shrink sheet to fit above keyboard
+      // Keyboard open — shrink sheet and hide top fields to maximize checklist
       const topOffset = window.visualViewport.offsetTop || 0;
       sheet.style.maxHeight = (vvh - topOffset - 10) + 'px';
-      // After resize, scroll checklist into best position
+      document.getElementById('mb-top-fields').style.display = 'none';
       setTimeout(()=>{
         const checklist = document.getElementById('mb-checklist');
         if(checklist) checklist.scrollTop = 0;
       }, 100);
     } else {
+      // Keyboard closed — restore everything
       sheet.style.maxHeight = '92vh';
+      document.getElementById('mb-top-fields').style.display = '';
     }
   });
 }

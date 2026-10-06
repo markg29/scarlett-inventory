@@ -2068,25 +2068,29 @@ function scrollBatchToSearch(){
 
 // Adjust batch modal height when virtual keyboard opens/closes
 if(window.visualViewport){
+  // Store the full screen height at launch — anything less than 75% means keyboard is open
+  const _fullVVH = window.visualViewport.height;
   window.visualViewport.addEventListener('resize', ()=>{
     const sheet = document.getElementById('mo-batch-sheet');
-    if(!sheet) return;
+    const topFields = document.getElementById('mb-top-fields');
+    if(!sheet || !topFields) return;
     const vvh = window.visualViewport.height;
-    const winH = window.innerHeight;
-    const keyboardOpen = winH - vvh > 100;
+    // Keyboard is open when viewport is less than 75% of full screen
+    const keyboardOpen = vvh < _fullVVH * 0.75;
     if(keyboardOpen){
-      // Keyboard open — shrink sheet and hide top fields to maximize checklist
-      const topOffset = window.visualViewport.offsetTop || 0;
-      sheet.style.maxHeight = (vvh - topOffset - 10) + 'px';
-      document.getElementById('mb-top-fields').style.display = 'none';
-      setTimeout(()=>{
-        const checklist = document.getElementById('mb-checklist');
-        if(checklist) checklist.scrollTop = 0;
-      }, 100);
+      sheet.style.maxHeight = (vvh - 10) + 'px';
+      topFields.style.display = 'none';
     } else {
-      // Keyboard closed — restore everything
       sheet.style.maxHeight = '92vh';
-      document.getElementById('mb-top-fields').style.display = '';
+      // Only restore top fields if no input is focused
+      const active = document.activeElement;
+      const inBatchModal = active && (
+        active.id === 'mb-search' ||
+        active.id === 'mb-notes' ||
+        active.id === 'mb-date' ||
+        (active.type === 'number' && active.closest('#mo-batch'))
+      );
+      if(!inBatchModal) topFields.style.display = '';
     }
   });
 }

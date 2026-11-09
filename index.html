@@ -2610,13 +2610,15 @@ async function runTextParse(){
     const type = IN_KW.test(line)?'in':'out';
     const qtyM = line.match(QTY_RE);
     const qty  = qtyM ? parseInt(qtyM[1]) : 1;
-    // Strip keywords, quantity, and unit words to get product name
+    // Strip keywords and quantity — but KEEP sizes like 40g, 350ml, 1L, 1.5L
     let name = line
       .replace(OUT_KW,'').replace(IN_KW,'')
       .replace(/[-–—:]/g,' ')
-      .replace(/\b\d+\s*(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?|ml|l|g|kg|liter|litre)\b/gi,'')
+      // Remove count units (pcs, boxes, etc.) WITH their leading number — but NOT size units
+      .replace(/\b\d+\s*(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
       .replace(/\b(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
-      .replace(/\b\d+\b/g,'')
+      // Remove standalone numbers (qty) — but NOT numbers attached to size units like 40g, 350ml, 1L, 1.5L
+      .replace(/\b(\d+\.?\d*)(?!\s*(?:g|kg|ml|l|oz|liter|litre|lb))\b/gi,'')
       .replace(/\s{2,}/g,' ').trim();
     if(!name) continue;
     const match = fuzzyMatch(name);

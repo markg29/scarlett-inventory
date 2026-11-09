@@ -2381,20 +2381,25 @@ function fuzzyMatch(raw){
   if(!goods.length) return null;
   const normalize = s => s.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
   const rn = normalize(raw);
-  const rWords = rn.split(' ').filter(Boolean);
+  const rWords = rn.split(' ').filter(Boolean).filter(w=>w.length>1); // skip single chars
+
+  if(!rWords.length) return null;
 
   let best=null, bestScore=0;
   goods.forEach(g=>{
     const gn=normalize(g.name);
     const gWords=gn.split(' ').filter(Boolean);
-    // Count matching words
+    // Count matching words (both directions)
     let matches=0;
-    rWords.forEach(w=>{ if(gWords.some(gw=>gw.includes(w)||w.includes(gw))) matches++; });
-    // Also check if raw contains key numbers like "1L", "500ml"
-    const score = matches / Math.max(rWords.length, gWords.length);
+    rWords.forEach(w=>{ if(gWords.some(gw=>gw===w||gw.startsWith(w)||w.startsWith(gw))) matches++; });
+    // Score: matches vs raw word count (how much of what user typed is covered)
+    // Divide by rWords to reward matching all typed words
+    const precision = matches / rWords.length;
+    const recall    = matches / gWords.length;
+    const score     = (precision + recall) / 2;
     if(score>bestScore){ bestScore=score; best=g; }
   });
-  return bestScore>0.15?{g:best,score:bestScore}:null;
+  return bestScore>0.2?{g:best,score:bestScore}:null;
 }
 
 async function runOcrScan(){
@@ -2605,10 +2610,12 @@ async function runTextParse(){
     const type = IN_KW.test(line)?'in':'out';
     const qtyM = line.match(QTY_RE);
     const qty  = qtyM ? parseInt(qtyM[1]) : 1;
-    // Strip keywords and quantity to get product name
+    // Strip keywords, quantity, and unit words to get product name
     let name = line
       .replace(OUT_KW,'').replace(IN_KW,'')
       .replace(/[-–—:]/g,' ')
+      .replace(/\b\d+\s*(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?|ml|l|g|kg|liter|litre)\b/gi,'')
+      .replace(/\b(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
       .replace(/\b\d+\b/g,'')
       .replace(/\s{2,}/g,' ').trim();
     if(!name) continue;

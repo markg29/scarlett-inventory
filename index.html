@@ -2583,49 +2583,68 @@ async function runTextParse(){
   const rawText = (document.getElementById('ocr-text-input').value||'').trim();
   if(!rawText){ toast('Mag-paste muna ng text','err'); return; }
 
+  document.getElementById('ocr-text-error-box').style.display='none';
+
+  // --- LOCAL PARSE (instant, no AI needed) ---
+  // Supports lines like: "Product Name - OUT 3", "Product IN 2", "Product ibinenta 5"
+  const OUT_KW=/\b(out|sold|ibinenta|binenta|labas|binilhin|kumuha|kinuha|nagbenta)\b/i;
+  const IN_KW=/\b(in|natanggap|received|add|dagdag|pumasok|stock.?in|naka.?tanggap)\b/i;
+  const QTY_RE=/\b(\d+)\b/;
+
+  const lines = rawText.split(/[\n;,]+/).map(l=>l.trim()).filter(Boolean);
+  const localItems = [];
+
+  for(const line of lines){
+    if(!line) continue;
+    const type = IN_KW.test(line)?'in':'out';
+    const qtyM = line.match(QTY_RE);
+    const qty  = qtyM ? parseInt(qtyM[1]) : 1;
+    // Strip keywords and quantity to get product name
+    let name = line
+      .replace(OUT_KW,'').replace(IN_KW,'')
+      .replace(/[-–—:]/g,' ')
+      .replace(/\b\d+\b/g,'')
+      .replace(/\s{2,}/g,' ').trim();
+    if(!name) continue;
+    const match = fuzzyMatch(name);
+    localItems.push({raw:name,qty,type,matched:match?match.g:null,skip:!match});
+  }
+
+  // If local parse got results, show review immediately (no AI)
+  if(localItems.length){
+    ocrParsedItems = localItems;
+    renderOcrReview();
+    return;
+  }
+
+  // --- FALLBACK: Gemini AI (only if local parse got nothing) ---
   const apiKey = (document.getElementById('ocr-api-key')||{}).value
                || localStorage.getItem(GEMINI_KEY_STORAGE)||'';
   if(!apiKey){
     const eb=document.getElementById('ocr-text-error-box');
-    if(eb){eb.style.display='block';eb.textContent='Wala pang Gemini API key. Pumunta sa tab na Larawan para ilagay ang key.';}
+    if(eb){eb.style.display='block';eb.textContent='Hindi makilala ang mga items. Subukan ulit o gumamit ng Gemini API key para sa AI parse.';}
     return;
   }
 
   document.getElementById('ocr-text-loading').style.display='block';
-  document.getElementById('ocr-text-error-box').style.display='none';
 
-  let MODELS=['gemini-flash-latest','gemini-2.0-flash','gemini-3.8-flash','gemini-flash-lite-latest'];
-  try{
-    const mr=await fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+apiKey);
-    if(mr.ok){
-      const mj=await mr.json();
-      const avail=(mj.models||[])
-        .filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent'))
-        .map(m=>m.name.replace('models/',''));
-      if(avail.length) MODELS=[...avail.filter(m=>m.includes('flash')),...avail];
-    }
-  }catch(e){}
+  const prompt='Parse this list to JSON. Respond ONLY with raw JSON array, no markdown:\n[{"name":"...","qty":number,"type":"in" or "out"}]\nRules: out=sold/out/labas/ibinenta. in=received/in/natanggap. Default out. Qty=1 if none.\nList:\n'+rawText;
 
-  const prompt='You are an inventory parser. I will give you a text list. Extract each inventory movement as JSON.\n\nRules:\n- Each line or entry may describe a product and whether stock went IN (received/added) or OUT (sold/used/removed).\n- Keywords for OUT: "out","ibinenta","binenta","sold","labas","binilhin","kumuha","kinuha"\n- Keywords for IN: "in","natanggap","received","add","dagdag","pumasok","stock in"\n- If unclear, default to OUT.\n- Quantity is a positive integer; if not stated, use 1.\n- Product name: extract as-is, with brand/variant if present.\n\nYou MUST respond with ONLY a raw JSON array, no explanation, no markdown, no code fences:\n[{"name":"product name","qty":number,"type":"in" or "out"},...]\n\nText to parse:\n---\n'+rawText+'\n---';
-
-  let resp, okModel;
-  for(const m of MODELS){
+  let resp;
+  for(const m of ['gemini-flash-latest','gemini-3.8-flash','gemini-2.0-flash']){
     try{
       resp=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+m+':generateContent?key='+apiKey,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          contents:[{parts:[{text:prompt}]}],
-          generationConfig:{temperature:0,maxOutputTokens:512}
-        })
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:0,maxOutputTokens:256}})
       });
-      if(resp.ok){okModel=m;break;}
-    }catch(e){}
+      if(resp.ok) break;
+      resp=null;
+    }catch(e){resp=null;}
   }
 
   document.getElementById('ocr-text-loading').style.display='none';
 
-  if(!resp||!resp.ok){
+  if(!resp){
     const eb=document.getElementById('ocr-text-error-box');
     if(eb){eb.style.display='block';eb.textContent='Hindi matawagan ang Gemini API. Siguraduhing tama ang API key.';}
     return;
@@ -2637,13 +2656,6 @@ async function runTextParse(){
     let arr=null;
     try{arr=JSON.parse(raw.trim());}catch(e){}
     if(!arr){const mx=raw.match(/\[[\s\S]*\]/);if(mx)try{arr=JSON.parse(mx[0]);}catch(e){}}
-    if(!arr){
-      arr=[];
-      for(const line of raw.split('\n')){
-        const mx2=line.match(/\{[^}]+\}/);
-        if(mx2)try{arr.push(JSON.parse(mx2[0]));}catch(e){}
-      }
-    }
     if(!arr||!arr.length) throw new Error('empty');
     ocrParsedItems=arr.map(item=>{
       const match=fuzzyMatch(item.name||'');

@@ -2420,19 +2420,19 @@ async function runOcrScan(){
       r.readAsDataURL(file);
     });
 
-    const prompt=`This is a handwritten inventory log. Extract ALL product entries.
-For each line identify:
-1. Product name (as written, including size/volume like 1L, 385ml, etc.)
-2. Quantity number
-3. Whether it is IN (incoming/delivery/stock received) or OUT (outgoing/sold/released)
+    const prompt=`You are reading a handwritten inventory log image. Extract all product entries.
 
-Look for section headers like "IN" and "OUT" to determine direction.
-If a date header like "NOV 9" appears, items below it belong to that date.
+RULES:
+- Look for column headers "IN" and "OUT" to know the direction of each item
+- Each row has: product name, and either IN quantity or OUT quantity
+- Product names may include size like 1L, 385ml, 500ml, etc.
+- Quantities may be written as numbers or "1 box", "2 pcs" etc - extract just the number
+- If no clear IN/OUT column, default to "out"
 
-Return ONLY a JSON array, no other text:
-[{"name":"product name as written","qty":number,"type":"in" or "out"}]
+You MUST respond with ONLY a raw JSON array. No explanation, no markdown, no code blocks.
+Example response: [{"name":"Datu Puti Patis 385ml","qty":1,"type":"out"},{"name":"Silver Swan Soy Sauce 1L","qty":2,"type":"in"}]
 
-If quantity is written as "1 box" treat as qty:1. Include ALL items you can read.`;
+Extract every readable item now:`;
 
     // Try models in order until one works
     // Fetch available models first, then pick one that supports generateContent
@@ -2471,11 +2471,21 @@ If quantity is written as "1 box" treat as qty:1. Include ALL items you can read
 
     const data=await resp.json();
     const text=data?.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    // Extract JSON from response
-    const jsonMatch=text.match(/\[[\s\S]*\]/);
-    if(!jsonMatch) throw new Error('Hindi ma-parse ang sagot ng AI. Subukan ulit.');
-
-    const parsed=JSON.parse(jsonMatch[0]);
+    // Extract JSON from response — try multiple strategies
+    let parsed = null;
+    // Try 1: direct parse
+    try{ parsed = JSON.parse(text.trim()); } catch(e){}
+    // Try 2: extract array with regex
+    if(!parsed){
+      const m = text.match(/\[[\s\S]*?\]/);
+      if(m) try{ parsed = JSON.parse(m[0]); }catch(e){}
+    }
+    // Try 3: find first [ to last ]
+    if(!parsed){
+      const s = text.indexOf('['), e2 = text.lastIndexOf(']');
+      if(s>=0 && e2>s) try{ parsed = JSON.parse(text.slice(s,e2+1)); }catch(e){}
+    }
+    if(!parsed || !Array.isArray(parsed)) throw new Error('Hindi ma-parse ang sagot ng AI. Raw: '+text.slice(0,200));
     if(!Array.isArray(parsed)||!parsed.length) throw new Error('Walang nahanap na items sa larawan.');
 
     // Fuzzy match each item

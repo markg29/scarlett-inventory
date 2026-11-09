@@ -2330,16 +2330,14 @@ loadItemLinks();
 // OCR SCAN via GEMINI VISION
 // ════════════════════════════════════════
 const GEMINI_KEY_STORAGE = 'scarlett_gemini_key';
-// Pre-load API key
-(function(){try{if(!localStorage.getItem(GEMINI_KEY_STORAGE))localStorage.setItem(GEMINI_KEY_STORAGE,'AIzaSyAb8RN6JCBvPntIp9yGBs0bbzB-ny9z-o4gkVeGQk11qt4zGCuA');}catch(e){}})();
 let ocrParsedItems = []; // [{rawName, rawQty, type, matchedId, matchedName, confidence}]
 
 function openOcrModal(){
   const key = localStorage.getItem(GEMINI_KEY_STORAGE)||'';
   const keyRow = document.getElementById('ocr-gemini-key-row');
   const keyInp = document.getElementById('ocr-api-key');
-  if(key){ keyRow.style.display='none'; }
-  else { keyRow.style.display='flex'; if(keyInp) keyInp.value=''; }
+  keyRow.style.display='flex';
+  if(keyInp) keyInp.value=key;
   document.getElementById('ocr-step-upload').style.display='flex';
   document.getElementById('ocr-step-review').style.display='none';
   document.getElementById('ocr-preview').style.display='none';

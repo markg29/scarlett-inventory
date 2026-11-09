@@ -2436,7 +2436,7 @@ Extract every readable item now:`;
 
     // Try models in order until one works
     // Fetch available models first, then pick one that supports generateContent
-    let MODELS=['gemini-3.8-flash','gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash','gemini-3.1-flash-lite','gemini-2.5-flash','gemini-flash-latest'];
+    let MODELS=['gemini-2.5-flash-lite','gemini-3.1-flash-lite','gemini-3.5-flash-lite','gemini-3.8-flash','gemini-flash-latest'];
     try{
       const mResp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
       if(mResp.ok){
@@ -2458,7 +2458,7 @@ Extract every readable item now:`;
               {text:prompt},
               {inline_data:{mime_type:file.type,data:b64}}
             ]}],
-            generationConfig:{temperature:0.1,maxOutputTokens:2048}
+            generationConfig:{temperature:0.1,maxOutputTokens:1024},thinkingConfig:{thinkingBudget:0}
           })
         });
         if(resp.ok) break;
@@ -2639,7 +2639,7 @@ async function ocrConfirmAll(){
         <span style="font-size:36px;">📄</span>
         <span style="font-size:14px;font-weight:600;color:var(--ink2);">Pumili ng larawan</span>
         <span style="font-size:12px;color:var(--ink3);">JPG, PNG, o kunan ng camera</span>
-        <input type="file" id="ocr-file" accept="image/*" capture="environment" style="display:none;" onchange="ocrPreviewFile(event)">
+        <input type="file" id="ocr-file" accept="image/*" style="display:none;" onchange="ocrPreviewFile(event)">
       </label>
       <img id="ocr-preview" style="display:none;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--line);">
       <div id="ocr-gemini-key-row" style="display:none;flex-direction:column;gap:6px;">

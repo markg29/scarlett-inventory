@@ -2412,24 +2412,33 @@ function renderOcrReview(){
     const typeBg    = item.type==='in'?'#e8f5ee':'#fdecea';
     const confColor = item.confidence>=70?'var(--ink3)':item.confidence>=40?'#c47d00':'#b03a2e';
     const goodsOptions = goods.map(g=>`<option value="${g.id}" ${g.id===item.matchedId?'selected':''}>${g.name}</option>`).join('');
+    // Current stock of matched item
+    const matchedGoods = item.matchedId ? goods.find(g=>g.id==item.matchedId) : null;
+    const curStock = matchedGoods ? (matchedGoods.stock||0) : null;
+    const afterStock = curStock !== null ? (item.type==='in' ? curStock+item.rawQty : curStock-item.rawQty) : null;
+    const stockColor = afterStock !== null && afterStock < 0 ? '#b03a2e' : 'var(--ink3)';
+    const stockInfo = curStock !== null
+      ? `<div style="font-size:11px;color:${stockColor};">Stock ngayon: <b>${curStock}</b> → pagkatapos: <b>${afterStock}</b>${afterStock<0?' ⚠ Kulang!':''}</div>`
+      : '';
     return `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;${item.skip?'opacity:.4':''}">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:11px;font-weight:800;color:${typeColor};background:${typeBg};padding:2px 8px;border-radius:999px;">${typeLbl}</span>
-        <span style="font-size:12px;color:var(--ink3);flex:1;">${item.rawName}</span>
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink3);cursor:pointer;">
+        <span style="font-size:12px;color:var(--ink3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.rawName}</span>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink3);cursor:pointer;flex-shrink:0;">
           <input type="checkbox" ${item.skip?'checked':''} onchange="ocrToggleSkip(${i},this.checked)"> Skip
         </label>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <select class="f-inp" style="flex:1;margin:0;font-size:13px;" onchange="ocrUpdateMatch(${i},this.value)">
+        <select class="f-inp" style="flex:1;margin:0;font-size:13px;min-width:0;" onchange="ocrUpdateMatch(${i},this.value)">
           <option value="">— Piliin ang produkto —</option>
           ${goodsOptions}
         </select>
-        <input type="number" class="f-inp" style="width:70px;margin:0;text-align:center;" value="${item.rawQty}" min="1" onchange="ocrUpdateQty(${i},this.value)">
+        <input type="number" class="f-inp" style="width:64px;margin:0;text-align:center;flex-shrink:0;" value="${item.rawQty}" min="1" onchange="ocrUpdateQty(${i},this.value)">
       </div>
       ${item.matchedName
-        ? `<div style="font-size:11px;color:${confColor};">✓ ${item.matchedName} <span style="opacity:.6;">(${item.confidence}% match)</span></div>`
+        ? `<div style="font-size:11px;color:${confColor};">✓ ${item.matchedName} <span style="opacity:.6;">(${item.confidence}%)</span></div>`
         : '<div style="font-size:11px;color:#b03a2e;">⚠ Walang match — piliin sa dropdown</div>'}
+      ${stockInfo}
     </div>`;
   }).join('');
 }
@@ -2505,31 +2514,34 @@ async function pasteFromClipboard(){
 
 <!-- OCR Modal -->
 <div class="overlay" id="mo-ocr" onclick="closeOverlay('mo-ocr',event)">
-  <div class="sheet" style="max-height:92vh;display:flex;flex-direction:column;">
+  <div class="sheet" style="max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden;">
 
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;">
-      <div style="font-size:16px;font-weight:700;">I-parse ang Listahan</div>
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 14px;border-bottom:1px solid var(--line);">
+      <div style="font-family:var(--serif);font-size:17px;font-weight:700;">I-parse ang Listahan</div>
       <button class="ico-btn" onclick="closeOverlay('mo-ocr')">✕</button>
     </div>
 
     <!-- Input step -->
-    <div id="ocr-step-upload" style="padding:0 18px 18px;display:flex;flex-direction:column;gap:12px;">
-      <div style="font-size:13px;color:var(--ink3);">I-paste ang listahan ng items. Halimbawa:<br><span style="font-family:monospace;font-size:12px;color:var(--ink2);">Nescafe Classic 40g OUT 20<br>Datu Puti Patis 385ml IN 2</span></div>
-      <textarea id="ocr-text-input" class="f-inp" placeholder="I-paste dito..." style="margin:0;min-height:180px;resize:vertical;font-size:13px;line-height:1.7;font-family:monospace;"></textarea>
+    <div id="ocr-step-upload" style="padding:16px 18px 18px;display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:12.5px;color:var(--ink3);line-height:1.6;">I-paste ang listahan. Format:<br>
+        <span style="font-family:monospace;font-size:12px;background:var(--cream);padding:4px 8px;border-radius:6px;display:inline-block;margin-top:4px;color:var(--ink2);">Nescafe Classic 40g OUT 20<br>Datu Puti Patis 385ml IN 2</span>
+      </div>
+      <textarea id="ocr-text-input" class="f-inp" placeholder="I-paste dito..." style="margin:0;min-height:160px;resize:vertical;font-size:13px;line-height:1.7;font-family:monospace;"></textarea>
       <div id="ocr-error-box" style="display:none;background:#fdecea;color:#b03a2e;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;"></div>
       <div style="display:flex;gap:8px;">
-        <button class="btn-primary" onclick="runTextParse()" style="flex:1;">⚡ I-parse</button>
-        <button class="g-filter-btn" onclick="pasteFromClipboard()" title="I-paste mula sa clipboard" style="padding:0 14px;">📋</button>
+        <button class="btn-primary" onclick="runTextParse()" style="flex:1;height:44px;font-size:14px;">⚡ I-parse</button>
+        <button class="ico-btn" onclick="pasteFromClipboard()" title="I-paste mula sa clipboard" style="width:44px;height:44px;font-size:18px;border:1.5px solid var(--line);border-radius:12px;">📋</button>
       </div>
     </div>
 
     <!-- Review step -->
-    <div id="ocr-step-review" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-      <div style="padding:0 18px 10px;font-size:13px;font-weight:600;color:var(--ink2);">I-review ang mga nahanap:</div>
-      <div id="ocr-items-list" style="flex:1;overflow-y:auto;padding:0 18px;display:flex;flex-direction:column;gap:10px;padding-bottom:16px;"></div>
-      <div style="padding:14px 18px;display:flex;gap:10px;border-top:1px solid var(--line);margin-top:10px;">
-        <button class="g-filter-btn" onclick="ocrBackToInput()">← Bumalik</button>
-        <button class="btn-primary" onclick="ocrConfirmAll()" style="flex:1;">✓ I-log lahat</button>
+    <div id="ocr-step-review" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;">
+      <div style="padding:14px 18px 8px;font-size:13px;font-weight:600;color:var(--ink2);">I-review ang mga nahanap:</div>
+      <div id="ocr-items-list" style="flex:1;overflow-y:auto;padding:0 18px 8px;display:flex;flex-direction:column;gap:10px;"></div>
+      <div style="padding:12px 18px 16px;display:flex;gap:8px;border-top:1px solid var(--line);">
+        <button class="g-filter-btn" onclick="ocrBackToInput()" style="height:44px;padding:0 16px;">← Bumalik</button>
+        <button class="btn-primary" onclick="ocrConfirmAll()" style="flex:1;height:44px;font-size:14px;">✓ I-log lahat</button>
       </div>
     </div>
 

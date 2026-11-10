@@ -2332,68 +2332,20 @@ loadItemLinks();
 const GEMINI_KEY_STORAGE = 'scarlett_gemini_key';
 let ocrParsedItems = []; // [{rawName, rawQty, type, matchedId, matchedName, confidence}]
 
-function openOcrModal(){
-  const key = localStorage.getItem(GEMINI_KEY_STORAGE)||'';
-  const keyRow = document.getElementById('ocr-gemini-key-row');
-  const keyInp = document.getElementById('ocr-api-key');
-  keyRow.style.display='flex';
-  if(keyInp) keyInp.value=key;
-  document.getElementById('ocr-step-upload').style.display='flex';
-  document.getElementById('ocr-step-review').style.display='none';
-  document.getElementById('ocr-preview').style.display='none';
-  document.getElementById('ocr-scan-btn').disabled=true;
-  document.getElementById('ocr-scan-btn').style.opacity='.5';
-  document.getElementById('ocr-loading').style.display='none';
-  document.getElementById('ocr-file').value='';
-  openOverlay('mo-ocr');
-}
+const GEMINI_KEY_STORAGE = 'scarlett_gemini_key';
 
-function saveOcrKey(){
-  const v=(document.getElementById('ocr-api-key').value||'').trim();
-  if(v.length>10) try{localStorage.setItem(GEMINI_KEY_STORAGE,v);}catch(e){}
-}
-
-function ocrPreviewFile(e){
-  const file=e.target.files[0];
-  if(!file)return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    const prev=document.getElementById('ocr-preview');
-    prev.src=ev.target.result;
-    prev.style.display='block';
-    const btn=document.getElementById('ocr-scan-btn');
-    btn.disabled=false; btn.style.opacity='1';
-    // Check key
-    const key=localStorage.getItem(GEMINI_KEY_STORAGE)||'';
-    const keyRow=document.getElementById('ocr-gemini-key-row');
-    if(!key) keyRow.style.display='flex';
-  };
-  reader.readAsDataURL(file);
-}
-
-function ocrBackToUpload(){
-  document.getElementById('ocr-step-upload').style.display='flex';
-  document.getElementById('ocr-step-review').style.display='none';
-}
-
-// Fuzzy match — returns best match from goods[] for a given raw name
 function fuzzyMatch(raw){
   if(!goods.length) return null;
   const normalize = s => s.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
   const rn = normalize(raw);
-  const rWords = rn.split(' ').filter(Boolean).filter(w=>w.length>1); // skip single chars
-
+  const rWords = rn.split(' ').filter(Boolean).filter(w=>w.length>1);
   if(!rWords.length) return null;
-
   let best=null, bestScore=0;
   goods.forEach(g=>{
     const gn=normalize(g.name);
     const gWords=gn.split(' ').filter(Boolean);
-    // Count matching words (both directions)
     let matches=0;
     rWords.forEach(w=>{ if(gWords.some(gw=>gw===w||gw.startsWith(w)||w.startsWith(gw))) matches++; });
-    // Score: matches vs raw word count (how much of what user typed is covered)
-    // Divide by rWords to reward matching all typed words
     const precision = matches / rWords.length;
     const recall    = matches / gWords.length;
     const score     = (precision + recall) / 2;
@@ -2402,147 +2354,68 @@ function fuzzyMatch(raw){
   return bestScore>0.2?{g:best,score:bestScore}:null;
 }
 
-async function runOcrScan(){
-  const fileInput=document.getElementById('ocr-file');
-  const file=fileInput.files[0];
-  if(!file){toast('Pumili muna ng larawan','err');return;}
+async function runTextParse(){
+  const rawText = (document.getElementById('ocr-text-input').value||'').trim();
+  if(!rawText){ toast('Mag-paste muna ng text','err'); return; }
 
-  let apiKey=(localStorage.getItem(GEMINI_KEY_STORAGE)||'').trim();
-  const keyInp=document.getElementById('ocr-api-key');
-  if(!apiKey && keyInp) apiKey=keyInp.value.trim();
-  if(!apiKey){toast('Kailangan ng Gemini API key','err');return;}
-  try{localStorage.setItem(GEMINI_KEY_STORAGE,apiKey);}catch(e){}
+  const errBox = document.getElementById('ocr-error-box');
+  if(errBox) errBox.style.display='none';
 
-  document.getElementById('ocr-loading').style.display='block';
-  document.getElementById('ocr-scan-btn').disabled=true;
-  const errBox=document.getElementById('ocr-error-box');
-  if(errBox){ errBox.style.display='none'; errBox.textContent=''; }
+  const OUT_KW=/\b(out|sold|ibinenta|binenta|labas|binilhin|kumuha|kinuha|nagbenta)\b/i;
+  const IN_KW=/\b(in|natanggap|received|add|dagdag|pumasok|stock.?in|naka.?tanggap)\b/i;
+  const QTY_RE=/\b(\d+)\b/;
 
-  try{
-    // Convert image to base64
-    const b64=await new Promise((res,rej)=>{
-      const r=new FileReader();
-      r.onload=e=>res(e.target.result.split(',')[1]);
-      r.onerror=rej;
-      r.readAsDataURL(file);
+  const lines = rawText.split(/[\n;]+/).map(l=>l.trim()).filter(Boolean);
+  const localItems = [];
+
+  for(const line of lines){
+    if(!line) continue;
+    const type = IN_KW.test(line)?'in':'out';
+    const qtyM = line.match(QTY_RE);
+    const qty  = qtyM ? parseInt(qtyM[1]) : 1;
+    let name = line
+      .replace(OUT_KW,'').replace(IN_KW,'')
+      .replace(/[-–—:]/g,' ')
+      .replace(/\b\d+\s*(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
+      .replace(/\b(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
+      .replace(/\b(\d+\.?\d*)(?!\s*(?:g|kg|ml|l|oz|liter|litre|lb))\b/gi,'')
+      .replace(/\s{2,}/g,' ').trim();
+    if(!name) continue;
+    const match = fuzzyMatch(name);
+    localItems.push({
+      rawName: name, rawQty: qty, type,
+      matchedId:   match ? match.g.id   : null,
+      matchedName: match ? match.g.name : null,
+      confidence:  match ? Math.round(match.score*100) : 0,
+      skip: !match
     });
-
-    const prompt=`You are reading a handwritten inventory log image. Extract all product entries.
-
-RULES:
-- Look for column headers "IN" and "OUT" to know the direction of each item
-- Each row has: product name, and either IN quantity or OUT quantity
-- Product names may include size like 1L, 385ml, 500ml, etc.
-- Quantities may be written as numbers or "1 box", "2 pcs" etc - extract just the number
-- If no clear IN/OUT column, default to "out"
-
-You MUST respond with ONLY a raw JSON array. No explanation, no markdown, no code blocks.
-Example response: [{"name":"Datu Puti Patis 385ml","qty":1,"type":"out"},{"name":"Silver Swan Soy Sauce 1L","qty":2,"type":"in"}]
-
-Extract every readable item now:`;
-
-    // Try models in order until one works
-    // Fetch available models first, then pick one that supports generateContent
-    let MODELS=['gemini-flash-latest','gemini-flash-lite-latest','gemini-3.8-flash'];
-    try{
-      const mResp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-      if(mResp.ok){
-        const mData=await mResp.json();
-        const available=(mData.models||[])
-          .filter(m=>m.supportedGenerationMethods&&m.supportedGenerationMethods.includes('generateContent'))
-          .map(m=>m.name.replace('models/',''));
-        if(available.length) MODELS=available;
-      }
-    }catch(e){}
-    let resp=null, lastErr='';
-    for(const model of MODELS){
-      try{
-        resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            contents:[{parts:[
-              {text:prompt},
-              {inline_data:{mime_type:file.type,data:b64}}
-            ]}],
-            generationConfig:{temperature:0,maxOutputTokens:512}
-          })
-        });
-        if(resp.ok) break;
-        const errData=await resp.json().catch(()=>({}));
-        lastErr=errData?.error?.message||`API error ${resp.status}`;
-        resp=null;
-      }catch(e){ lastErr=e.message; resp=null; }
-    }
-    if(!resp){ throw new Error(lastErr||'Walang working na Gemini model. Siguraduhin na valid ang API key.'); }
-
-    const data=await resp.json();
-    const text=data?.candidates?.[0]?.content?.parts?.[0]?.text||'';
-    // Extract JSON from response — try multiple strategies
-    let parsed = null;
-    // Try 1: direct parse
-    try{ parsed = JSON.parse(text.trim()); } catch(e){}
-    // Try 2: extract array with regex
-    if(!parsed){
-      const m = text.match(/\[[\s\S]*?\]/);
-      if(m) try{ parsed = JSON.parse(m[0]); }catch(e){}
-    }
-    // Try 3: find first [ to last ]
-    if(!parsed){
-      const s = text.indexOf('['), e2 = text.lastIndexOf(']');
-      if(s>=0 && e2>s) try{ parsed = JSON.parse(text.slice(s,e2+1)); }catch(e){}
-    }
-    if(!parsed || !Array.isArray(parsed)) throw new Error('Hindi ma-parse ang sagot ng AI. Raw: '+text.slice(0,200));
-    if(!Array.isArray(parsed)||!parsed.length) throw new Error('Walang nahanap na items sa larawan.');
-
-    // Fuzzy match each item
-    ocrParsedItems=parsed.map(item=>{
-      const match=fuzzyMatch(item.name);
-      return {
-        rawName:item.name,
-        rawQty:item.qty||1,
-        type:item.type||'out',
-        matchedId:match?match.g.id:null,
-        matchedName:match?match.g.name:null,
-        confidence:match?Math.round(match.score*100):0,
-        skip:false
-      };
-    });
-
-    renderOcrReview();
-    document.getElementById('ocr-step-upload').style.display='none';
-    document.getElementById('ocr-step-review').style.display='flex';
-
-  }catch(e){
-    console.error('OCR Error:', e);
-    // Show error permanently in modal so it doesn't disappear
-    const errDiv = document.getElementById('ocr-error-box');
-    if(errDiv){ errDiv.textContent = '❌ ' + e.message; errDiv.style.display='block'; }
-    else { toast('❌ '+e.message,'err'); }
-  }finally{
-    document.getElementById('ocr-loading').style.display='none';
-    document.getElementById('ocr-scan-btn').disabled=false;
-    document.getElementById('ocr-scan-btn').style.opacity='1';
   }
+
+  if(!localItems.length){
+    if(errBox){errBox.style.display='block';errBox.textContent='Walang items ang nahanap. Halimbawa: "Nescafe Classic 40g OUT 20"';}
+    return;
+  }
+
+  ocrParsedItems = localItems;
+  renderOcrReview();
 }
 
 function renderOcrReview(){
-  // Show review panel, hide upload/text tabs
-  ['ocr-step-upload','ocr-step-text'].forEach(id=>{
-    const el=document.getElementById(id); if(el) el.style.display='none';
-  });
-  const reviewPanel=document.getElementById('ocr-step-review');
+  const uploadPanel = document.getElementById('ocr-step-upload');
+  if(uploadPanel) uploadPanel.style.display='none';
+  const reviewPanel = document.getElementById('ocr-step-review');
   if(reviewPanel) reviewPanel.style.display='flex';
-  const list=document.getElementById('ocr-items-list');
-  const today=new Date().toISOString().slice(0,10);
-  list.innerHTML=ocrParsedItems.map((item,i)=>{
-    const typeColor=item.type==='in'?'#2a7a4b':'#b03a2e';
-    const typeLbl=item.type==='in'?'IN':'OUT';
-    const confColor=item.confidence>=70?'var(--ink3)':item.confidence>=40?'#c47d00':'#b03a2e';
-    const goodsOptions=goods.map(g=>`<option value="${g.id}" ${g.id===item.matchedId?'selected':''}>${g.name}</option>`).join('');
+
+  const list = document.getElementById('ocr-items-list');
+  list.innerHTML = ocrParsedItems.map((item,i)=>{
+    const typeColor = item.type==='in'?'#2a7a4b':'#b03a2e';
+    const typeLbl   = item.type==='in'?'IN':'OUT';
+    const typeBg    = item.type==='in'?'#e8f5ee':'#fdecea';
+    const confColor = item.confidence>=70?'var(--ink3)':item.confidence>=40?'#c47d00':'#b03a2e';
+    const goodsOptions = goods.map(g=>`<option value="${g.id}" ${g.id===item.matchedId?'selected':''}>${g.name}</option>`).join('');
     return `<div style="border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;${item.skip?'opacity:.4':''}">
       <div style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:11px;font-weight:800;color:${typeColor};background:${item.type==='in'?'#e8f5ee':'#fdecea'};padding:2px 8px;border-radius:999px;">${typeLbl}</span>
+        <span style="font-size:11px;font-weight:800;color:${typeColor};background:${typeBg};padding:2px 8px;border-radius:999px;">${typeLbl}</span>
         <span style="font-size:12px;color:var(--ink3);flex:1;">${item.rawName}</span>
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink3);cursor:pointer;">
           <input type="checkbox" ${item.skip?'checked':''} onchange="ocrToggleSkip(${i},this.checked)"> Skip
@@ -2555,226 +2428,76 @@ function renderOcrReview(){
         </select>
         <input type="number" class="f-inp" style="width:70px;margin:0;text-align:center;" value="${item.rawQty}" min="1" onchange="ocrUpdateQty(${i},this.value)">
       </div>
-      ${item.matchedName?`<div style="font-size:11px;color:${confColor};">✓ ${item.matchedName} <span style="opacity:.6;">(${item.confidence}% match)</span></div>`:'<div style="font-size:11px;color:#b03a2e;">⚠ Walang match — piliin sa dropdown</div>'}
+      ${item.matchedName
+        ? `<div style="font-size:11px;color:${confColor};">✓ ${item.matchedName} <span style="opacity:.6;">(${item.confidence}% match)</span></div>`
+        : '<div style="font-size:11px;color:#b03a2e;">⚠ Walang match — piliin sa dropdown</div>'}
     </div>`;
   }).join('');
 }
 
-function ocrToggleSkip(i,skip){
-  ocrParsedItems[i].skip=skip;
-}
-function ocrUpdateMatch(i,id){
-  const g=goods.find(x=>x.id===id);
-  ocrParsedItems[i].matchedId=id;
-  ocrParsedItems[i].matchedName=g?g.name:null;
-}
-function ocrUpdateQty(i,v){
-  ocrParsedItems[i].rawQty=parseFloat(v)||1;
+function ocrToggleSkip(i, skip){
+  ocrParsedItems[i].skip = skip;
+  renderOcrReview();
 }
 
-function ocrSwitchTab(tab){
-  const photoTab = document.getElementById('ocr-tab-photo');
-  const textTab  = document.getElementById('ocr-tab-text');
-  const photoStep= document.getElementById('ocr-step-upload');
-  const textStep = document.getElementById('ocr-step-text');
-  const review   = document.getElementById('ocr-step-review');
-  if(review) review.style.display='none';
-  if(tab==='photo'){
-    photoStep.style.display='flex'; textStep.style.display='none';
-    photoTab.style.background='var(--wine-900)'; photoTab.style.color='var(--parchment)';
-    textTab.style.background='var(--cream)';     textTab.style.color='var(--ink)';
-  } else {
-    textStep.style.display='flex'; photoStep.style.display='none';
-    textTab.style.background='var(--wine-900)'; textTab.style.color='var(--parchment)';
-    photoTab.style.background='var(--cream)';   photoTab.style.color='var(--ink)';
-  }
+function ocrUpdateMatch(i, id){
+  const g = goods.find(x=>x.id==id);
+  if(g){ ocrParsedItems[i].matchedId=g.id; ocrParsedItems[i].matchedName=g.name; ocrParsedItems[i].skip=false; }
+  else { ocrParsedItems[i].matchedId=null; ocrParsedItems[i].matchedName=null; }
 }
 
-async function runTextParse(){
-  const rawText = (document.getElementById('ocr-text-input').value||'').trim();
-  if(!rawText){ toast('Mag-paste muna ng text','err'); return; }
-
-  document.getElementById('ocr-text-error-box').style.display='none';
-
-  // --- LOCAL PARSE (instant, no AI needed) ---
-  // Supports lines like: "Product Name - OUT 3", "Product IN 2", "Product ibinenta 5"
-  const OUT_KW=/\b(out|sold|ibinenta|binenta|labas|binilhin|kumuha|kinuha|nagbenta)\b/i;
-  const IN_KW=/\b(in|natanggap|received|add|dagdag|pumasok|stock.?in|naka.?tanggap)\b/i;
-  const QTY_RE=/\b(\d+)\b/;
-
-  const lines = rawText.split(/[\n;,]+/).map(l=>l.trim()).filter(Boolean);
-  const localItems = [];
-
-  for(const line of lines){
-    if(!line) continue;
-    const type = IN_KW.test(line)?'in':'out';
-    const qtyM = line.match(QTY_RE);
-    const qty  = qtyM ? parseInt(qtyM[1]) : 1;
-    // Strip keywords and quantity — but KEEP sizes like 40g, 350ml, 1L, 1.5L
-    let name = line
-      .replace(OUT_KW,'').replace(IN_KW,'')
-      .replace(/[-–—:]/g,' ')
-      // Remove count units (pcs, boxes, etc.) WITH their leading number — but NOT size units
-      .replace(/\b\d+\s*(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
-      .replace(/\b(pcs?|pc|pieces?|boxes?|bx|bottles?|btl|bags?|sachet|sachets?|pouch|pouches?|pack|packs?)\b/gi,'')
-      // Remove standalone numbers (qty) — but NOT numbers attached to size units like 40g, 350ml, 1L, 1.5L
-      .replace(/\b(\d+\.?\d*)(?!\s*(?:g|kg|ml|l|oz|liter|litre|lb))\b/gi,'')
-      .replace(/\s{2,}/g,' ').trim();
-    if(!name) continue;
-    const match = fuzzyMatch(name);
-    localItems.push({
-      rawName: name,
-      rawQty:  qty,
-      type:    type,
-      matchedId:   match ? match.g.id   : null,
-      matchedName: match ? match.g.name : null,
-      confidence:  match ? Math.round(match.score*100) : 0,
-      skip: !match
-    });
-  }
-
-  // If local parse got results, show review immediately (no AI)
-  if(localItems.length){
-    ocrParsedItems = localItems;
-    renderOcrReview();
-    return;
-  }
-
-  // No items parsed — show error
-  const eb=document.getElementById('ocr-text-error-box');
-  if(eb){eb.style.display='block';eb.textContent='Walang items ang nahanap. Siguraduhing may laman ang bawat linya, halimbawa: "Kopiko OUT 5".';}
+function ocrUpdateQty(i, v){
+  ocrParsedItems[i].rawQty = Math.max(1, parseInt(v)||1);
 }
 
 async function ocrConfirmAll(){
-  const toLog=ocrParsedItems.filter(x=>!x.skip&&x.matchedId);
-  if(!toLog.length){toast('Walang items na ilo-log. Siguraduhing may napiling produkto.','err');return;}
+  const toLog = ocrParsedItems.filter(item=>!item.skip && item.matchedId);
+  if(!toLog.length){ toast('Walang items na ilo-log','err'); return; }
 
-  const btn=document.getElementById('ocr-confirm-btn');
-  btn.disabled=true; btn.textContent='Nag-se-save...';
-
-  const today=new Date().toISOString().slice(0,10);
-  // Group by type (in/out) for batch
-  const inItems=toLog.filter(x=>x.type==='in');
-  const outItems=toLog.filter(x=>x.type==='out');
+  const inItems  = toLog.filter(x=>x.type==='in') .map(x=>({goodsId:x.matchedId, qty:x.rawQty}));
+  const outItems = toLog.filter(x=>x.type==='out').map(x=>({goodsId:x.matchedId, qty:x.rawQty}));
 
   try{
-    const batchId=genMovementId('ocr');
-    const allItems=[
-      ...inItems.map(x=>({id:genMovementId('in'),batchId,type:'in',goodsItemId:x.matchedId,itemName:x.matchedName,qty:x.rawQty,date:today,notes:'via OCR scan'})),
-      ...outItems.map(x=>({id:genMovementId('out'),batchId,type:'out',goodsItemId:x.matchedId,itemName:x.matchedName,qty:x.rawQty,date:today,notes:'via OCR scan'}))
-    ];
+    if(inItems.length)  await apiPost({action:'batchAddMovement', type:'in',  items:inItems});
+    if(outItems.length) await apiPost({action:'batchAddMovement', type:'out', items:outItems});
 
-    try{
-      await apiPost({action:'batchAddMovement',items:allItems});
-    }catch(e){
-      _syncQueue.push({payload:{action:'batchAddMovement',items:allItems},attempts:1});
-      showSyncWarning();
-      setTimeout(retrySyncQueue,5000);
-    }
-
-    allItems.forEach(m=>{
-      const g=goods.find(x=>x.id===m.goodsItemId);
-      if(g) g.quantity+=(m.type==='in'?m.qty:-m.qty);
-      movements.push({id:m.id,batchId:m.batchId,type:m.type,goodsItemId:m.goodsItemId,itemName:m.itemName,qty:m.qty,notes:m.notes,date:fmtDate(today),rawDate:today});
+    // Update local data
+    toLog.forEach(item=>{
+      const g = goods.find(x=>x.id==item.matchedId);
+      if(g) g.stock = (g.stock||0) + (item.type==='in'?item.rawQty:-item.rawQty);
     });
 
     closeOverlay('mo-ocr');
-    renderGoods();renderOutgoing();renderIncoming();
-    showSaveSuccess(`${allItems.length} items na-log via scan! 📷`);
+    toast(`✓ Na-log ang ${toLog.length} items`,'ok');
+    renderGoods();
   }catch(e){
-    toast('❌ '+e.message,'err');
-  }finally{
-    btn.disabled=false; btn.textContent='✓ I-log lahat';
+    toast('Error sa pag-log: '+e.message,'err');
   }
 }
 
-</script>
 
-<!-- ════════════════════════════════════════
-     MODAL: LINK TO ORDERKO
-     ════════════════════════════════════════ -->
-<div class="overlay" id="mo-link" onclick="closeOverlay('mo-link',event)">
-  <div class="sheet" style="max-height:88vh;">
-    <div class="sheet-handle"></div>
-    <div class="sheet-title">🔗 I-link sa OrderKo</div>
-    <div id="link-goods-name" style="font-size:13px;color:var(--ink3);margin:-10px 0 14px;"></div>
-    <!-- Search -->
-    <input id="link-search" class="f-inp" placeholder="Maghanap ng OrderKo item..." oninput="renderLinkList()" style="margin-bottom:10px;"/>
-    <!-- Current links summary -->
-    <div id="link-current" style="display:none;background:var(--parchment-dim);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--ink2);"></div>
-    <!-- Item list -->
-    <div id="link-list" style="max-height:45vh;overflow-y:auto;border:1px solid var(--line);border-radius:12px;margin-bottom:14px;"></div>
-    <div class="modal-btns" style="flex-direction:column;gap:8px;">
-      <div style="display:flex;gap:8px;width:100%;">
-        <button class="m-cancel" onclick="closeOverlay('mo-link')">Kanselahin</button>
-        <button class="m-save" id="link-save-btn" onclick="saveLinks()">I-save</button>
-      </div>
-      <button id="link-unlink-btn" onclick="unlinkAll()" style="width:100%;height:40px;border-radius:12px;border:1.5px solid var(--danger);background:transparent;color:var(--danger);font-size:13px;font-weight:700;cursor:pointer;display:none;">🗑 I-unlink lahat</button>
-    </div>
-  </div>
-</div>
+function openOcrModal(){
+  // Reset to input step
+  document.getElementById('ocr-step-upload').style.display='flex';
+  document.getElementById('ocr-step-review').style.display='none';
+  const errBox = document.getElementById('ocr-error-box');
+  if(errBox) errBox.style.display='none';
+  openOverlay('mo-ocr');
+}
 
+function ocrBackToInput(){
+  document.getElementById('ocr-step-upload').style.display='flex';
+  document.getElementById('ocr-step-review').style.display='none';
+}
 
-<!-- ════════ OCR SCAN MODAL ════════ -->
-<div class="overlay" id="mo-ocr" onclick="closeOverlay('mo-ocr',event)">
-  <div class="sheet" style="max-height:92vh;display:flex;flex-direction:column;gap:0;">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 18px 10px;">
-      <div style="font-family:var(--serif);font-size:18px;font-weight:700;">📋 I-scan ang Sulat</div>
-      <button class="ico-btn" onclick="closeOverlay('mo-ocr')">✕</button>
-    </div>
-
-    <!-- Tabs -->
-    <div style="display:flex;gap:0;margin:0 18px 14px;border:1.5px solid var(--line);border-radius:10px;overflow:hidden;">
-      <button id="ocr-tab-photo" onclick="ocrSwitchTab('photo')" style="flex:1;padding:9px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:var(--wine-900);color:var(--parchment);">📷 Larawan</button>
-      <button id="ocr-tab-text" onclick="ocrSwitchTab('text')" style="flex:1;padding:9px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:var(--cream);color:var(--ink);">📝 I-paste Text</button>
-    </div>
-
-    <!-- Step 1a: Photo upload -->
-    <div id="ocr-step-upload" style="padding:0 18px 18px;display:flex;flex-direction:column;gap:14px;">
-      <div style="font-size:13px;color:var(--ink3);line-height:1.5;">I-upload ang litrato ng handwritten inventory list.</div>
-      <label id="ocr-upload-label" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:2px dashed var(--line);border-radius:14px;padding:28px 16px;cursor:pointer;">
-        <span style="font-size:36px;">📄</span>
-        <span style="font-size:14px;font-weight:600;color:var(--ink2);">Pumili ng larawan</span>
-        <span style="font-size:12px;color:var(--ink3);">JPG, PNG, o kunan ng camera</span>
-        <input type="file" id="ocr-file" accept="image/*" style="display:none;" onchange="ocrPreviewFile(event)">
-      </label>
-      <img id="ocr-preview" style="display:none;max-height:200px;object-fit:contain;border-radius:10px;border:1px solid var(--line);">
-      <div id="ocr-gemini-key-row" style="flex-direction:column;gap:6px;">
-        <label style="font-size:12px;font-weight:600;color:var(--ink3);">Gemini API Key</label>
-        <input id="ocr-api-key" class="f-inp" placeholder="AIza..." style="margin:0;" oninput="saveOcrKey()">
-      </div>
-      <div id="ocr-error-box" style="display:none;background:#fdecea;color:#b03a2e;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;word-break:break-all;"></div>
-      <button id="ocr-scan-btn" class="btn-primary" onclick="runOcrScan()" disabled style="opacity:.5;">🔍 I-scan</button>
-      <div id="ocr-loading" style="display:none;text-align:center;padding:16px;color:var(--ink3);font-size:13px;">
-        <div class="spin" style="margin:0 auto 8px;"></div>Binabasa ng Gemini AI...
-      </div>
-    </div>
-
-    <!-- Step 1b: Text paste -->
-    <div id="ocr-step-text" style="display:none;padding:0 18px 18px;flex-direction:column;gap:14px;">
-      <div style="font-size:13px;color:var(--ink3);line-height:1.5;">I-paste ang text ng inventory list. Pwede galing sa ibang app, OCR tool, o typed list.</div>
-      <textarea id="ocr-text-input" class="f-inp" placeholder="Halimbawa:&#10;Datu Puti Patis 385ml - OUT 1&#10;Silver Swan Soy Sauce 1L - IN 2&#10;Kopiko Blanca - OUT 20" style="margin:0;min-height:160px;resize:vertical;font-size:13px;line-height:1.6;"></textarea>
-      <div id="ocr-text-error-box" style="display:none;background:#fdecea;color:#b03a2e;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.5;word-break:break-all;"></div>
-      <button class="btn-primary" onclick="runTextParse()">⚡ I-parse</button>
-      <div id="ocr-text-loading" style="display:none;text-align:center;padding:16px;color:var(--ink3);font-size:13px;">
-        <div class="spin" style="margin:0 auto 8px;"></div>Pinipili ang mga items...
-      </div>
-    </div>
-
-    <!-- Step 2: Review -->
-    <div id="ocr-step-review" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
-      <div style="padding:0 18px 10px;display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:13px;font-weight:700;color:var(--ink2);">I-review ang mga nahanap:</div>
-        <button style="font-size:12px;color:var(--wine-600);background:none;border:none;cursor:pointer;font-weight:600;" onclick="ocrBackToUpload()">← Bumalik</button>
-      </div>
-      <div id="ocr-items-list" style="flex:1;overflow-y:auto;padding:0 18px;display:flex;flex-direction:column;gap:8px;"></div>
-      <div style="padding:14px 18px 18px;border-top:1px solid var(--line);display:flex;gap:10px;">
-        <button class="btn-secondary" style="flex:1;" onclick="closeOverlay('mo-ocr')">Kanselahin</button>
-        <button id="ocr-confirm-btn" class="btn-primary" style="flex:2;" onclick="ocrConfirmAll()">✓ I-log lahat</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-</body>
-</html>
+async function pasteFromClipboard(){
+  try{
+    const text = await navigator.clipboard.readText();
+    if(text){
+      document.getElementById('ocr-text-input').value = text;
+      document.getElementById('ocr-error-box').style.display='none';
+    }
+  }catch(e){
+    toast('Hindi ma-access ang clipboard — mag-paste ng manu-mano','err');
+  }
+}

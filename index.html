@@ -2462,14 +2462,33 @@ async function ocrConfirmAll(){
   const toLog = ocrParsedItems.filter(item=>!item.skip && item.matchedId);
   if(!toLog.length){ toast('Walang items na ilo-log','err'); return; }
 
-  const inItems  = toLog.filter(x=>x.type==='in') .map(x=>({goodsId:x.matchedId, qty:x.rawQty}));
-  const outItems = toLog.filter(x=>x.type==='out').map(x=>({goodsId:x.matchedId, qty:x.rawQty}));
+  const date  = new Date().toISOString().slice(0,10);
+  const notes = 'OCR parse';
+
+  // Build items in the same format as the regular batch save
+  // Each type gets its own batchId, matching how saveBatchConfirm works
+  const inItems  = toLog.filter(x=>x.type==='in');
+  const outItems = toLog.filter(x=>x.type==='out');
 
   try{
-    if(inItems.length)  await apiPost({action:'batchAddMovement', type:'in',  items:inItems});
-    if(outItems.length) await apiPost({action:'batchAddMovement', type:'out', items:outItems});
+    if(inItems.length){
+      const batchId = genMovementId('in');
+      const items = inItems.map(x=>{
+        const g = goods.find(gx=>gx.id==x.matchedId);
+        return {id:genMovementId('in'), batchId, type:'in', goodsItemId:x.matchedId, itemName:g?g.name:'', qty:x.rawQty, date, notes};
+      });
+      await apiPost({action:'batchAddMovement', items});
+    }
+    if(outItems.length){
+      const batchId = genMovementId('out');
+      const items = outItems.map(x=>{
+        const g = goods.find(gx=>gx.id==x.matchedId);
+        return {id:genMovementId('out'), batchId, type:'out', goodsItemId:x.matchedId, itemName:g?g.name:'', qty:x.rawQty, date, notes};
+      });
+      await apiPost({action:'batchAddMovement', items});
+    }
 
-    // Update local data
+    // Update local quantities
     toLog.forEach(item=>{
       const g = goods.find(x=>x.id==item.matchedId);
       if(g) g.quantity = (g.quantity||0) + (item.type==='in'?item.rawQty:-item.rawQty);

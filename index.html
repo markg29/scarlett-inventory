@@ -2414,7 +2414,7 @@ function renderOcrReview(){
     const goodsOptions = goods.map(g=>`<option value="${g.id}" ${g.id===item.matchedId?'selected':''}>${g.name}</option>`).join('');
     // Current stock of matched item
     const matchedGoods = item.matchedId ? goods.find(g=>g.id==item.matchedId) : null;
-    const curStock = matchedGoods ? (matchedGoods.stock||0) : null;
+    const curStock = matchedGoods ? (matchedGoods.quantity||0) : null;
     const afterStock = curStock !== null ? (item.type==='in' ? curStock+item.rawQty : curStock-item.rawQty) : null;
     const stockColor = afterStock !== null && afterStock < 0 ? '#b03a2e' : 'var(--ink3)';
     const stockInfo = curStock !== null
@@ -2472,7 +2472,7 @@ async function ocrConfirmAll(){
     // Update local data
     toLog.forEach(item=>{
       const g = goods.find(x=>x.id==item.matchedId);
-      if(g) g.stock = (g.stock||0) + (item.type==='in'?item.rawQty:-item.rawQty);
+      if(g) g.quantity = (g.quantity||0) + (item.type==='in'?item.rawQty:-item.rawQty);
     });
 
     closeOverlay('mo-ocr');

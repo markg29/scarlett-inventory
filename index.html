@@ -489,6 +489,7 @@ img{display:block;max-width:100%;}
     <div style="padding:0 18px 12px;display:flex;gap:8px;">
       <input id="goods-search" class="g-search" placeholder="Maghanap ng produkto..." oninput="renderGoods()"/>
       <button class="g-filter-btn" id="g-filter-low" onclick="toggleLowFilter()">⚠ Mababa</button>
+      <button class="g-filter-btn" id="g-filter-idle" onclick="toggleIdleFilter()">🕐 Hindi Gumagalaw</button>
       <button class="g-filter-btn" onclick="openOcrModal()" style="background:var(--wine-900);color:var(--parchment);border-color:var(--wine-700);" title="I-scan ang sulat-kamay">📷</button>
     </div>
 
@@ -849,6 +850,7 @@ const API = 'https://script.google.com/macros/s/AKfycbzrKmEjPc8Xj6PRqnzkbukTk7rP
 let goods = [], movements = [];
 let curPage = 'goods';
 let lowStockFilter = false;
+let idleStockFilter = false;
 let pendingDelete = null;
 let editingMovementId = null;
 
@@ -1494,6 +1496,22 @@ async function saveLinks(){
   }
 }
 
+function toggleLowFilter(){
+  lowStockFilter = !lowStockFilter;
+  if(idleStockFilter){ idleStockFilter=false; const b=document.getElementById('g-filter-idle'); if(b) b.classList.remove('on'); }
+  const btn = document.getElementById('g-filter-low');
+  if(btn) btn.classList.toggle('on', lowStockFilter);
+  renderGoods();
+}
+
+function toggleIdleFilter(){
+  idleStockFilter = !idleStockFilter;
+  if(lowStockFilter){ lowStockFilter=false; const b=document.getElementById('g-filter-low'); if(b) b.classList.remove('on'); }
+  const btn = document.getElementById('g-filter-idle');
+  if(btn) btn.classList.toggle('on', idleStockFilter);
+  renderGoods();
+}
+
 function renderGoods(){
   // Summary cards
   const totalItems=goods.length;
@@ -1523,6 +1541,17 @@ function renderGoods(){
   const q=(document.getElementById('goods-search').value||'').toLowerCase().trim();
   let list=[...goods];
   if(lowStockFilter)list=list.filter(g=>g.minStockQty>0&&g.quantity<=g.minStockQty);
+  if(idleStockFilter){
+    const twoDaysAgo = new Date(); twoDaysAgo.setDate(twoDaysAgo.getDate()-2); twoDaysAgo.setHours(0,0,0,0);
+    list=list.filter(g=>{
+      if(!g.quantity||g.quantity<=0) return false; // skip zero-stock items
+      const lastOut = movements
+        .filter(m=>m.type==='out'&&m.goodsItemId==g.id)
+        .map(m=>m.rawDate?new Date(m.rawDate):new Date(m.date))
+        .sort((a,b)=>b-a)[0];
+      return !lastOut || lastOut < twoDaysAgo;
+    });
+  }
   if(q){
     const words=q.toLowerCase().split(/\s+/).filter(Boolean);
     list=list.filter(g=>{
@@ -1537,7 +1566,8 @@ function renderGoods(){
   document.getElementById('goods-count').textContent=list.length+' item'+(list.length!==1?'s':'');
 
   if(!list.length){
-    document.getElementById('goods-wrap').innerHTML=`<div class="empty"><div class="empty-ic">📦</div><div class="empty-h">${q||lowStockFilter?'Walang resulta':'Wala pang produkto'}</div><div class="empty-b">${q||lowStockFilter?'Subukan ang ibang search o tanggalin ang filter.':'I-tap ang + button para magdagdag ng unang produkto.'}</div></div>`;
+    const anyFilter=q||lowStockFilter||idleStockFilter;
+    document.getElementById('goods-wrap').innerHTML=`<div class="empty"><div class="empty-ic">📦</div><div class="empty-h">${anyFilter?'Walang resulta':'Wala pang produkto'}</div><div class="empty-b">${anyFilter?'Subukan ang ibang search o tanggalin ang filter.':'I-tap ang + button para magdagdag ng unang produkto.'}</div></div>`;
     return;
   }
 

@@ -338,6 +338,11 @@ img{display:block;max-width:100%;}
   text-align:center;min-width:46px;
 }
 .g-stock.low{color:var(--danger);}
+.g-stock.zero{color:var(--ink3);font-size:13px;}
+.g-card.out-of-stock{opacity:0.55;}
+.g-card.out-of-stock .g-stock-wrap{background:#f0f0f0;border-radius:10px;padding:4px 6px;}
+.oos-badge{font-size:9px;font-weight:800;color:#999;text-transform:uppercase;letter-spacing:.5px;text-align:center;margin-top:1px;}
+@keyframes tickerScroll{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
 .g-stock-lbl{font-size:9px;color:var(--ink3);font-weight:700;text-transform:uppercase;letter-spacing:.3px;text-align:center;}
 .g-stock-lbl.pill-style{font-size:9.5px;color:var(--brass-dim);background:#f3e3c5;border-radius:999px;padding:3px 10px;display:inline-block;white-space:nowrap;}
 .g-card{cursor:pointer;}
@@ -485,12 +490,19 @@ img{display:block;max-width:100%;}
     </div>
 
 
+    <!-- Ticker / announcement -->
+    <div id="goods-ticker-wrap" style="overflow:hidden;background:var(--wine-900);padding:7px 0;margin-bottom:4px;">
+      <div id="goods-ticker" style="display:inline-block;white-space:nowrap;animation:tickerScroll 18s linear infinite;color:var(--parchment);font-size:15px;font-weight:700;padding-left:100%;">Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   </div>
+    </div>
+
     <!-- Search + filter -->
-    <div style="padding:0 18px 12px;display:flex;gap:8px;">
-      <input id="goods-search" class="g-search" placeholder="Maghanap ng produkto..." oninput="renderGoods()"/>
+    <div style="padding:0 18px 8px;">
+      <input id="goods-search" class="g-search" placeholder="Maghanap ng produkto..." oninput="renderGoods()" style="width:100%;box-sizing:border-box;"/>
+    </div>
+    <div style="padding:0 18px 12px;display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
       <button class="g-filter-btn" id="g-filter-low" onclick="toggleLowFilter()">⚠ Mababa</button>
       <button class="g-filter-btn" id="g-filter-idle" onclick="toggleIdleFilter()">🕐 Hindi Gumagalaw</button>
-      <button class="g-filter-btn" onclick="openOcrModal()" style="background:var(--wine-900);color:var(--parchment);border-color:var(--wine-700);" title="I-scan ang sulat-kamay">📷</button>
+      <button class="g-filter-btn" onclick="openOcrModal()" style="background:var(--wine-900);color:var(--parchment);border-color:var(--wine-700);flex-shrink:0;" title="I-parse ang listahan">📋 I-parse</button>
     </div>
 
     <div class="sec-head">
@@ -1496,6 +1508,16 @@ async function saveLinks(){
   }
 }
 
+function setTicker(msg){
+  const wrap = document.getElementById('goods-ticker-wrap');
+  const el = document.getElementById('goods-ticker');
+  if(!wrap||!el) return;
+  if(!msg){ wrap.style.display='none'; return; }
+  // repeat message so scroll feels seamless
+  el.textContent = (msg + '   •   ').repeat(4);
+  wrap.style.display='block';
+}
+
 function toggleLowFilter(){
   lowStockFilter = !lowStockFilter;
   if(idleStockFilter){ idleStockFilter=false; const b=document.getElementById('g-filter-idle'); if(b) b.classList.remove('on'); }
@@ -1575,23 +1597,25 @@ function renderGoods(){
     '<div class="goods-list">'+
     list.map(g=>{
       const isLow=g.minStockQty>0&&g.quantity<=g.minStockQty;
+      const isZero=!g.quantity||g.quantity<=0;
       const thumb=g.imageUrl
         ? `<img class="g-thumb" src="${g.imageUrl}" onerror="this.style.display='none';this.nextSibling&&(this.nextSibling.style.display='flex')"/><div class="g-thumb" style="display:none;align-items:center;justify-content:center;">📦</div>`
         : `<div class="g-thumb">📦</div>`;
-      return `<div class="g-card" onclick="openGoodsDetails('${E(g.id)}')" id="gcard-${E(g.id)}">
+      return `<div class="g-card${isZero?' out-of-stock':''}" onclick="openGoodsDetails('${E(g.id)}')" id="gcard-${E(g.id)}">
         ${thumb}
         <div class="g-info">
           <div class="g-name">${g.name}</div>
           <div class="g-meta">
             ${g.price>0?`<span class="g-price">₱${g.price.toFixed(2)}</span>`:''}
             ${g.barcode?`<span class="pill brass">${g.barcode}</span>`:''}
-            ${isLow?`<span class="pill danger">⚠ Mababa</span>`:''}
+            ${isLow&&!isZero?`<span class="pill danger">⚠ Mababa</span>`:''}
+            ${isZero?`<span class="pill" style="background:#eee;color:#888;">WALA NA</span>`:''}
             ${itemLinks[g.id]&&itemLinks[g.id].size>0?`<span style="background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:1px 6px;font-size:10px;font-weight:700;">🔗 ${itemLinks[g.id].size}</span>`:''}
           </div>
         </div>
         <div class="g-stock-wrap">
-          <div class="g-stock${isLow?' low':''}">${g.quantity}</div>
-          <div class="g-stock-lbl${g.unit?' pill-style':''}">${g.unit||'stock'}</div>
+          <div class="g-stock${isZero?' zero':isLow?' low':''}">${isZero?'—':g.quantity}</div>
+          <div class="g-stock-lbl${g.unit&&!isZero?' pill-style':''}">${isZero?'wala na':g.unit||'stock'}</div>
         </div>
         <div class="g-chevron">›</div>
       </div>`;

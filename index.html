@@ -130,6 +130,7 @@ img{display:block;max-width:100%;}
   background:var(--parchment);
 }
 .page.on{visibility:visible;pointer-events:all;z-index:2;}
+#pg-goods{padding-top:calc(var(--NAV) + 40px + 14px);}
 
 /* ── BOTTOM TABS ── */
 #tabs{
@@ -412,6 +413,107 @@ img{display:block;max-width:100%;}
 @keyframes chocoBlinkL{0%,85%,100%{transform:scaleY(0);}87%{transform:scaleY(1);}89%{transform:scaleY(0);}91%{transform:scaleY(1);}93%{transform:scaleY(0);}}
 @keyframes chocoBlinkR{0%,85%,100%{transform:scaleY(0);}87%{transform:scaleY(1);}89%{transform:scaleY(0);}91%{transform:scaleY(1);}93%{transform:scaleY(0);}}
 
+/* ════════════════════════════════════════
+   RESPONSIVE — TABLET (768px+)
+   ════════════════════════════════════════ */
+@media(min-width:768px){
+  body{max-width:100%;overflow:auto;}
+  #topbar,#tabs,.page,#goods-ticker-wrap{max-width:100%;}
+  .page{position:relative;top:auto;left:auto;right:auto;bottom:auto;
+    min-height:calc(100vh - var(--NAV) - var(--TAB));
+    visibility:visible;pointer-events:all;display:none;}
+  .page.on{display:block;}
+  #pg-goods{padding-top:calc(var(--NAV) + 40px + 20px);}
+  /* bigger goods grid — 2 columns */
+  .goods-list{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 24px;}
+  .g-name{font-size:15px;}
+  .g-stock{font-size:17px;}
+  .g-thumb{width:56px;height:56px;}
+  /* bigger search + filter */
+  #goods-search{font-size:15px;}
+  .g-filter-btn{font-size:13px;padding:11px 16px;}
+  /* fix inline padding on search/filter rows */
+  #pg-goods > div[style*="padding:0 18px"]{padding-left:24px!important;padding-right:24px!important;}
+  /* summary cards bigger */
+  .sum-card{padding:14px 18px;}
+  .sum-val{font-size:22px!important;}
+  /* section titles */
+  .sec-title{font-size:23px;}
+  /* topbar bigger */
+  #topbar{padding:0 28px;}
+  .tb-name{font-size:20px;}
+  /* ticker */
+  #goods-ticker-wrap{padding:12px 0;}
+  #goods-ticker{font-size:18px;}
+  /* tabs bigger */
+  #tabs{padding-bottom:8px;}
+  .tab-ic{font-size:22px;}
+  .tab-lb{font-size:12px;}
+  /* overlays centered (not bottom sheet) */
+  .overlay{align-items:center;justify-content:center;}
+  .sheet{border-radius:18px!important;width:min(560px,92vw);max-height:88vh!important;}
+}
+
+/* ════════════════════════════════════════
+   RESPONSIVE — DESKTOP (1200px+)
+   Sidebar layout: left nav + right content
+   ════════════════════════════════════════ */
+@media(min-width:1200px){
+  :root{--SIDE:220px;--NAV:64px;--TAB:0px;}
+  body{display:flex;flex-direction:column;max-width:100%;}
+
+  /* topbar spans full width */
+  #topbar{max-width:100%;padding:0 32px;height:var(--NAV);}
+
+  /* sidebar replaces bottom tabs */
+  #tabs{
+    position:fixed;top:var(--NAV);left:0;bottom:0;
+    width:var(--SIDE);height:auto;
+    flex-direction:column;justify-content:flex-start;align-items:stretch;
+    padding:16px 0 24px;border-top:none;border-right:1px solid var(--line);
+    background:var(--cream);gap:4px;z-index:200;
+  }
+  .tab{
+    flex:none;flex-direction:row;justify-content:flex-start;
+    padding:12px 20px;gap:12px;border-radius:0;
+    border-left:3px solid transparent;
+  }
+  .tab.on{border-left-color:var(--wine-600);background:var(--parchment);}
+  .tab-ic{font-size:20px;}
+  .tab-lb{font-size:14px;font-weight:700;}
+  .tab-dot{top:50%;right:14px;transform:translateY(-50%);}
+
+  /* all pages shift right of sidebar */
+  .page{
+    position:fixed;top:var(--NAV);left:var(--SIDE);right:0;bottom:0;
+    padding-top:14px;padding-left:0;padding-bottom:24px;
+    max-width:none;width:auto;
+  }
+  #pg-goods{padding-top:calc(40px + 20px);}
+
+  /* ticker also shifts */
+  #goods-ticker-wrap{
+    position:fixed;top:var(--NAV);left:var(--SIDE);right:0;
+    max-width:none;z-index:199;
+  }
+
+  /* 3-col goods grid */
+  .goods-list{grid-template-columns:repeat(3,1fr);gap:16px;padding:0 32px;}
+  .g-name{font-size:15px;}
+
+  /* overlays */
+  .overlay{align-items:center;justify-content:center;}
+  .sheet{border-radius:18px!important;width:min(620px,80vw);max-height:85vh!important;}
+
+  /* bigger padding throughout */
+  .sec-head{padding:0 32px;margin-bottom:16px;}
+  #choco-card{margin:0 28px 10px!important;}
+  #pg-goods > div[style*="padding:0 18px"]{padding-left:32px!important;padding-right:32px!important;}
+  .goods-list{padding:0 32px;}
+
+  /* toast above sidebar height */
+  #toast{bottom:32px;}
+}
 </style>
 </head>
 <body>
@@ -443,6 +545,11 @@ img{display:block;max-width:100%;}
     <button style="height:36px;padding:0 18px;border-radius:999px;border:none;background:var(--ok);color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;" onclick="openBatchMovement('in')">📥 I-record</button>
   </div>
   <button class="tb-action" id="tb-action" onclick="topAction()" style="display:none;">＋</button>
+</div>
+
+<!-- TICKER: fixed below topbar, always visible -->
+<div id="goods-ticker-wrap" style="position:fixed;top:var(--NAV);left:0;right:0;max-width:460px;margin:0 auto;overflow:hidden;background:var(--wine-950);padding:11px 0;z-index:299;border-bottom:1px solid var(--wine-700);">
+  <div id="goods-ticker" style="display:inline-block;white-space:nowrap;animation:tickerScroll 28s linear infinite;color:var(--parchment);font-size:17px;font-weight:700;padding-left:100%;">Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   </div>
 </div>
 
 <!-- ════════════════════════════════════════
@@ -491,9 +598,6 @@ img{display:block;max-width:100%;}
 
 
     <!-- Ticker / announcement -->
-    <div id="goods-ticker-wrap" style="overflow:hidden;background:var(--wine-900);padding:10px 0;margin-bottom:4px;">
-      <div id="goods-ticker" style="display:inline-block;white-space:nowrap;animation:tickerScroll 28s linear infinite;color:var(--parchment);font-size:17px;font-weight:700;padding-left:100%;">Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   </div>
-    </div>
 
     <!-- Search + filter -->
     <div style="padding:0 18px 8px;">

@@ -491,8 +491,8 @@ img{display:block;max-width:100%;}
 
 
     <!-- Ticker / announcement -->
-    <div id="goods-ticker-wrap" style="overflow:hidden;background:var(--wine-900);padding:7px 0;margin-bottom:4px;">
-      <div id="goods-ticker" style="display:inline-block;white-space:nowrap;animation:tickerScroll 18s linear infinite;color:var(--parchment);font-size:15px;font-weight:700;padding-left:100%;">Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   </div>
+    <div id="goods-ticker-wrap" style="overflow:hidden;background:var(--wine-900);padding:10px 0;margin-bottom:4px;">
+      <div id="goods-ticker" style="display:inline-block;white-space:nowrap;animation:tickerScroll 28s linear infinite;color:var(--parchment);font-size:17px;font-weight:700;padding-left:100%;">Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   </div>
     </div>
 
     <!-- Search + filter -->
@@ -1582,8 +1582,21 @@ function renderGoods(){
       return words.every(w=>name.includes(w)||barcode.includes(w));
     });
   }
-  // Sort: highest stock quantity first
-  list.sort((a,b)=>b.quantity-a.quantity);
+  // Sort: idle items first (no OUT in 2 days), then by quantity desc
+  const twoDaysAgoSort = new Date(); twoDaysAgoSort.setDate(twoDaysAgoSort.getDate()-2); twoDaysAgoSort.setHours(0,0,0,0);
+  function isIdle(g){
+    if(!g.quantity||g.quantity<=0) return false;
+    const lastOut = movements
+      .filter(m=>m.type==='out'&&m.goodsItemId==g.id)
+      .map(m=>m.rawDate?new Date(m.rawDate):new Date(m.date))
+      .sort((a,b)=>b-a)[0];
+    return !lastOut || lastOut < twoDaysAgoSort;
+  }
+  list.sort((a,b)=>{
+    const ia=isIdle(a)?1:0, ib=isIdle(b)?1:0;
+    if(ib!==ia) return ib-ia; // idle first
+    return b.quantity-a.quantity; // then most stock
+  });
 
   document.getElementById('goods-count').textContent=list.length+' item'+(list.length!==1?'s':'');
 

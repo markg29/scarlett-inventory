@@ -58,13 +58,12 @@
 }
 
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;}
+html{height:100%;background:var(--parchment);}
 body{
   font-family:var(--sans);
   background:var(--parchment);
   color:var(--ink);
-  max-width:460px;
-  margin:0 auto;
+  width:100%;
   overflow:hidden;
   position:relative;
   -webkit-font-smoothing:antialiased;
@@ -78,7 +77,7 @@ img{display:block;max-width:100%;}
 /* ── TOP BAR ── */
 #topbar{
   position:fixed;top:0;left:0;right:0;
-  width:100%;max-width:460px;margin:0 auto;height:var(--NAV);
+  width:100%;height:var(--NAV);
   background:var(--wine-900);
   display:flex;align-items:center;justify-content:space-between;
   padding:0 18px;z-index:300;
@@ -121,7 +120,7 @@ img{display:block;max-width:100%;}
 /* ── PAGES ── */
 .page{
   position:fixed;top:0;left:0;right:0;
-  width:100%;max-width:460px;margin:0 auto;bottom:0;
+  width:100%;bottom:0;
   overflow-y:auto;-webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
   padding-top:calc(var(--NAV) + 14px);
@@ -135,7 +134,7 @@ img{display:block;max-width:100%;}
 /* ── BOTTOM TABS ── */
 #tabs{
   position:fixed;bottom:0;left:0;right:0;margin:0 auto;
-  width:100%;max-width:460px;height:var(--TAB);
+  width:100%;height:var(--TAB);
   background:var(--cream);
   border-top:1px solid var(--line);
   display:flex;z-index:300;
@@ -232,7 +231,7 @@ img{display:block;max-width:100%;}
   transform:translateY(100%);
   transition:transform .28s cubic-bezier(.4,0,.2,1);
   max-height:88vh;overflow-y:auto;
-  margin:0 auto;max-width:460px;
+  width:100%;
 }
 .overlay.on .sheet{transform:translateY(0);}
 .sheet-handle{width:36px;height:4px;background:var(--line);border-radius:2px;margin:12px auto 18px;}
@@ -417,8 +416,7 @@ img{display:block;max-width:100%;}
    RESPONSIVE — TABLET (768px+)
    ════════════════════════════════════════ */
 @media(min-width:768px){
-  body{max-width:100%;overflow:auto;}
-  #topbar,#tabs,.page,#goods-ticker-wrap{max-width:100%;}
+  body{overflow:auto;}
   .page{position:relative;top:auto;left:auto;right:auto;bottom:auto;
     min-height:calc(100vh - var(--NAV) - var(--TAB));
     visibility:visible;pointer-events:all;display:none;}
@@ -548,7 +546,7 @@ img{display:block;max-width:100%;}
 </div>
 
 <!-- TICKER: fixed below topbar, always visible -->
-<div id="goods-ticker-wrap" style="position:fixed;top:var(--NAV);left:0;right:0;max-width:460px;margin:0 auto;overflow:hidden;background:var(--wine-950);padding:11px 0;z-index:299;border-bottom:1px solid var(--wine-700);">
+<div id="goods-ticker-wrap" style="position:fixed;top:var(--NAV);left:0;right:0;overflow:hidden;background:var(--wine-950);padding:11px 0;z-index:299;border-bottom:1px solid var(--wine-700);">
   <div id="goods-ticker" style="display:inline-block;white-space:nowrap;animation:tickerScroll 28s linear infinite;color:var(--parchment);font-size:17px;font-weight:700;padding-left:100%;">Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   Pakicheck lahat ng items na nandito sa mismong display. Salamat!   •   </div>
 </div>
 
